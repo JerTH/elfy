@@ -25,7 +25,7 @@ macro_rules! read_byte {
 }
 
 macro_rules! read_u16 {
-    ($reader:expr, $data_format:expr) => {
+    ($reader:expr, $descriptor:expr) => {
         {
             let mut __bytes: [u8; 2] = [0; 2];
             let mut __temp: u16 = 0;
@@ -33,7 +33,7 @@ macro_rules! read_u16 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 2], u16>(__bytes);
 
-                if $data_format == ELFData::BigEndian {
+                if $descriptor.data_format() == DataFormat::BE {
                     __temp = __temp.to_le();
                 }
             }
@@ -43,7 +43,7 @@ macro_rules! read_u16 {
 }
 
 macro_rules! read_u32 {
-    ($reader:expr, $data_format:expr) => {
+    ($reader:expr, $descriptor:expr) => {
         {
             let mut __bytes: [u8; 4] = [0; 4];
             let mut __temp: u32 = 0;
@@ -51,7 +51,7 @@ macro_rules! read_u32 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 4], u32>(__bytes);
 
-                if $data_format == ELFData::BigEndian {
+                if $descriptor.data_format() == DataFormat::BE {
                     __temp = __temp.to_le();
                 }
             }
@@ -61,7 +61,7 @@ macro_rules! read_u32 {
 }
 
 macro_rules! read_u64 {
-    ($reader:expr, $data_format:expr) => {
+    ($reader:expr, $descriptor:expr) => {
         {
             let mut __bytes: [u8; 8] = [0; 8];
             let mut __temp: u64 = 0;
@@ -69,7 +69,7 @@ macro_rules! read_u64 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 8], u64>(__bytes);
 
-                if $data_format == ELFData::BigEndian {
+                if $descriptor.data_format() == DataFormat::BE {
                     __temp = __temp.to_le();
                 }
             }
