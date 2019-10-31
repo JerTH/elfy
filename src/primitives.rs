@@ -54,45 +54,45 @@ impl Descriptor {
 /**
  * Trait used to define how individual parts of the ELF binary structure should be parsed
  */
-pub trait ELFParslet {
+pub trait Parslet {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> where Self: Sized;
 }
 
 /**
- * ELFShort
+ * Short
  * 
  * Represents a 16 bit half word in an ELF file
  */
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub struct ELFShort(pub u16);
+pub struct Short(pub u16);
 
-impl ELFParslet for ELFShort {
+impl Parslet for Short {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        Ok(ELFShort(read_u16!(reader, descriptor)))
+        Ok(Short(read_u16!(reader, descriptor)))
     }
 }
 
-impl std::fmt::Debug for ELFShort {
+impl std::fmt::Debug for Short {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }
 
 /**
- * ELFWord
+ * Word
  * 
  * Represents a 32 bit word in an ELF file
  */
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub struct ELFWord(pub u32);
+pub struct Word(pub u32);
 
-impl ELFParslet for ELFWord {
+impl Parslet for Word {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        Ok(ELFWord(read_u32!(reader, descriptor)))
+        Ok(Word(read_u32!(reader, descriptor)))
     }
 }
 
-impl std::fmt::Debug for ELFWord {
+impl std::fmt::Debug for Word {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -100,33 +100,31 @@ impl std::fmt::Debug for ELFWord {
 
 
 /**
- * ELFSize
- * 
  * Used to represent both 32 and 64 bit sizes and offsets within an ELF file
  */
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum ELFSize {
+pub enum Size {
     Elf32Size(u32),
     Elf64Size(u64)
 }
 
-impl ELFSize {
+impl Size {
     pub fn as_usize(&self) -> usize {
         match self {
-            ELFSize::Elf32Size(v) => (*v).try_into().unwrap(),
-            ELFSize::Elf64Size(v) => (*v).try_into().unwrap()
+            Size::Elf32Size(v) => (*v).try_into().unwrap(),
+            Size::Elf64Size(v) => (*v).try_into().unwrap()
         }
     }
 }
 
-impl ELFParslet for ELFSize {
+impl Parslet for Size {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match descriptor.data_class() {
             DataClass::Elf32 => {
-                Ok(ELFSize::Elf32Size(read_u32!(reader, descriptor)))
+                Ok(Size::Elf32Size(read_u32!(reader, descriptor)))
             },
             DataClass::Elf64 => {
-                Ok(ELFSize::Elf64Size(read_u64!(reader, descriptor)))
+                Ok(Size::Elf64Size(read_u64!(reader, descriptor)))
             },
             DataClass::Unknown => {
                 panic!("Attempted to parse ELF size with an unknown ELF class: {:?}");
@@ -135,13 +133,13 @@ impl ELFParslet for ELFSize {
     }
 }
 
-impl std::fmt::Debug for ELFSize {
+impl std::fmt::Debug for Size {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ELFSize::Elf32Size(v) => {
+            Size::Elf32Size(v) => {
                 write!(f, "{}", v)
             },
-            ELFSize::Elf64Size(v) => {
+            Size::Elf64Size(v) => {
                 write!(f, "{}", v)
             }
         }
@@ -150,33 +148,33 @@ impl std::fmt::Debug for ELFSize {
 
 
 /**
- * ELFAddress
+ * Address
  * 
  * This struct is used to represent both 32 and 64 bit virtual or physical addresses in ELF files and process images
  */
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub enum ELFAddress {
+pub enum Address {
     Elf32Addr(u32),
     Elf64Addr(u64)
 }
 
-impl ELFAddress {
+impl Address {
     pub fn as_usize(&self) -> usize {
         match self {
-            ELFAddress::Elf32Addr(v) => (*v).try_into().unwrap(),
-            ELFAddress::Elf64Addr(v) => (*v).try_into().unwrap()
+            Address::Elf32Addr(v) => (*v).try_into().unwrap(),
+            Address::Elf64Addr(v) => (*v).try_into().unwrap()
         }
     }
 }
 
-impl ELFParslet for ELFAddress {
+impl Parslet for Address {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match descriptor.data_class() {
             DataClass::Elf32 => {
-                Ok(ELFAddress::Elf32Addr(read_u32!(reader, descriptor)))
+                Ok(Address::Elf32Addr(read_u32!(reader, descriptor)))
             },
             DataClass::Elf64 => {
-                Ok(ELFAddress::Elf64Addr(read_u64!(reader, descriptor)))
+                Ok(Address::Elf64Addr(read_u64!(reader, descriptor)))
             },
             DataClass::Unknown => {
                 panic!("Attempted to parse ELF address with an unknown ELF class: {:?}");
@@ -185,13 +183,13 @@ impl ELFParslet for ELFAddress {
     }
 }
 
-impl std::fmt::Debug for ELFAddress {
+impl std::fmt::Debug for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ELFAddress::Elf32Addr(v) => {
+            Address::Elf32Addr(v) => {
                 write!(f, "{:#010X}", v)
             },
-            ELFAddress::Elf64Addr(v) => {
+            Address::Elf64Addr(v) => {
                 write!(f, "{:#010X}", v)
             }
         }

@@ -9,51 +9,51 @@ use crate::constants::*;
 mod primitives;
 use crate::primitives::*;
 
-/* ELF FILE HEADER */
+/* Elf FILE HEADER */
 
 /**
- * Represents an ELF file header
+ * Represents an Elf file header
  * 
- * This header is used to identify and process the rest of an ELF file, it includes offsets to the program
+ * This header is used to identify and process the rest of an Elf file, it includes offsets to the program
  * header table and the section header table
  */
 #[derive(Debug)]
-struct ELFHeader {
-    ident: ELFIdent,
-    ty: ELFType,
-    machine: ELFMachine,
-    version: ELFVersion,
-    entry: ELFAddress,
-    phoff: ELFAddress,
-    shoff: ELFAddress,
-    flags: ELFFlags,
-    ehsize: ELFShort,
-    phentsize: ELFShort,
-    phnum: ELFShort,
-    shentsize: ELFShort,
-    shnum: ELFShort,
-    shstrndx: ELFShort,
+struct Header {
+    ident: Identifier,
+    ty: ElfType,
+    machine: Machine,
+    version: Version,
+    entry: Address,
+    phoff: Size,
+    shoff: Size,
+    flags: Flags,
+    ehsize: Short,
+    phentsize: Short,
+    phnum: Short,
+    shentsize: Short,
+    shnum: Short,
+    shstrndx: Short,
 }
 
-impl ELFParslet for ELFHeader {
+impl Parslet for Header {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        let ident = ELFIdent::parse(reader, descriptor)?;
+        let ident = Identifier::parse(reader, descriptor)?;
 
-        let header = ELFHeader {
+        let header = Header {
             ident: ident,
-            ty: ELFType::parse(reader, descriptor)?,
-            machine: ELFMachine::parse(reader, descriptor)?,
-            version: ELFVersion::parse(reader, descriptor)?,
-            entry: ELFAddress::parse(reader, descriptor)?,
-            phoff: ELFAddress::parse(reader, descriptor)?,
-            shoff: ELFAddress::parse(reader, descriptor)?,
-            flags: ELFFlags::parse(reader, descriptor)?,
-            ehsize: ELFShort::parse(reader, descriptor)?,
-            phentsize: ELFShort::parse(reader, descriptor)?,
-            phnum: ELFShort::parse(reader, descriptor)?,
-            shentsize: ELFShort::parse(reader, descriptor)?,
-            shnum: ELFShort::parse(reader, descriptor)?,
-            shstrndx: ELFShort::parse(reader, descriptor)?,
+            ty: ElfType::parse(reader, descriptor)?,
+            machine: Machine::parse(reader, descriptor)?,
+            version: Version::parse(reader, descriptor)?,
+            entry: Address::parse(reader, descriptor)?,
+            phoff: Size::parse(reader, descriptor)?,
+            shoff: Size::parse(reader, descriptor)?,
+            flags: Flags::parse(reader, descriptor)?,
+            ehsize: Short::parse(reader, descriptor)?,
+            phentsize: Short::parse(reader, descriptor)?,
+            phnum: Short::parse(reader, descriptor)?,
+            shentsize: Short::parse(reader, descriptor)?,
+            shnum: Short::parse(reader, descriptor)?,
+            shstrndx: Short::parse(reader, descriptor)?,
         };
 
         Ok(header)
@@ -61,35 +61,35 @@ impl ELFParslet for ELFHeader {
 }
 
 /**
- * ELFIdent
+ * Identifier
  * 
- * Used to validate an ELF file, and identify the format of its contents
+ * Used to validate an Elf file, and identify the format of its contents
  */
 #[derive(Debug)]
-struct ELFIdent {
-    magic: ELFMagic,
-    class: ELFClass,
+struct Identifier {
+    magic: Magic,
+    class: Class,
     data: ELFData,
     version: ELFIdentVersion,
-    os_abi: ELFOsAbi,
-    abi_ver: ELFAbiVersion,
+    os_abi: OsAbi,
+    abi_ver: AbiVersion,
 }
 
-impl ELFParslet for ELFIdent {
+impl Parslet for Identifier {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        let parsed = ELFIdent {
-            magic: ELFMagic::parse(reader, descriptor)?,
-            class: ELFClass::parse(reader, descriptor)?,
+        let parsed = Identifier {
+            magic: Magic::parse(reader, descriptor)?,
+            class: Class::parse(reader, descriptor)?,
             data: ELFData::parse(reader, descriptor)?,
             version: ELFIdentVersion::parse(reader, descriptor)?,
-            os_abi: ELFOsAbi::parse(reader, descriptor)?,
-            abi_ver: ELFAbiVersion::parse(reader, descriptor)?,
+            os_abi: OsAbi::parse(reader, descriptor)?,
+            abi_ver: AbiVersion::parse(reader, descriptor)?,
         };
 
         descriptor.class = match parsed.class {
-            ELFClass::ELF32 => DataClass::Elf32,
-            ELFClass::ELF64 => DataClass::Elf64,
-            ELFClass::Invalid(_) => DataClass::Unknown,
+            Class::ELF32 => DataClass::Elf32,
+            Class::ELF64 => DataClass::Elf64,
+            Class::Invalid(_) => DataClass::Unknown,
         };
 
         descriptor.format = match parsed.data {
@@ -106,49 +106,47 @@ impl ELFParslet for ELFIdent {
 }
 
 /**
- * ELF magic. Identifies a file as ELF
+ * Elf magic. Identifies a file as Elf
  */
 #[derive(Debug)]
-enum ELFMagic {
+enum Magic {
     Valid,
     Invalid,
 }
 
-impl ELFParslet for ELFMagic {
+impl Parslet for Magic {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         let bytes = read_n_bytes!(reader, 4);
         if bytes.as_slice() == &ELF_MAGIC_BYTES[..] {
-            Ok(ELFMagic::Valid)
+            Ok(Magic::Valid)
         } else {
-            Ok(ELFMagic::Invalid)
+            Ok(Magic::Invalid)
         }
     }
 }
 
 /**
- * ELFClass
- * 
- * Identifies an ELF binary as being either 32 or 64 bit
+ * Identifies an Elf binary as being either 32 or 64 bit
  */
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ELFClass {
+enum Class {
     ELF32,
     ELF64,
     Invalid(u8)
 }
 
-impl ELFParslet for ELFClass {
+impl Parslet for Class {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         match read_byte!(reader) {
-            0x01 => Ok(ELFClass::ELF32),
-            0x02 => Ok(ELFClass::ELF64),
-            b => Ok(ELFClass::Invalid(b))
+            0x01 => Ok(Class::ELF32),
+            0x02 => Ok(Class::ELF64),
+            b => Ok(Class::Invalid(b))
         }
     }
 }
 
 /**
- * Identifies the format of an ELF file, 2's Complement Little Endian or Big Endian
+ * Identifies the format of an Elf file, 2's Complement Little Endian or Big Endian
  */
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum ELFData {
@@ -157,7 +155,7 @@ enum ELFData {
     Invalid(u8)
 }
 
-impl ELFParslet for ELFData {
+impl Parslet for ELFData {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         match read_byte!(reader) {
             0x01 => Ok(ELFData::LittleEndian),
@@ -173,56 +171,56 @@ enum ELFIdentVersion {
     Invalid(u8)
 }
 
-impl ELFParslet for ELFIdentVersion {
+impl Parslet for ELFIdentVersion {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         match read_byte!(reader) {
-            0x01 => Ok(ELFIdentVersion::Current), // ELF only has one version, version one. Nonetheless we parse it as "current"
+            0x01 => Ok(ELFIdentVersion::Current), // Elf only has one version, version one. Nonetheless we parse it as "current"
             b => Ok(ELFIdentVersion::Invalid(b))
         }
     }
 }
 
 /**
- * ELFOsAbi
+ * OsAbi
  */
 #[derive(Debug)]
-enum ELFOsAbi {
+enum OsAbi {
     UNIXSystemV,
     Invalid(u8)
 }
 
-impl ELFParslet for ELFOsAbi {
+impl Parslet for OsAbi {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         match read_byte!(reader) {
-            0x00 => Ok(ELFOsAbi::UNIXSystemV),
-            b => Ok(ELFOsAbi::Invalid(b))
+            0x00 => Ok(OsAbi::UNIXSystemV),
+            b => Ok(OsAbi::Invalid(b))
         }
     }
 }
 
 /**
- * ELFAbiVersion
+ * AbiVersion
  */
 #[derive(Debug)]
-enum ELFAbiVersion {
+enum AbiVersion {
     Unspecified,
     Version(u8),
 }
 
-impl ELFParslet for ELFAbiVersion {
+impl Parslet for AbiVersion {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         match read_byte!(reader) {
-            0x00 => Ok(ELFAbiVersion::Unspecified),
-            b => Ok(ELFAbiVersion::Version(b))
+            0x00 => Ok(AbiVersion::Unspecified),
+            b => Ok(AbiVersion::Version(b))
         }
     }
 }
 
 /**
- * ELFType
+ * ElfType
  */
 #[derive(Debug)]
-enum ELFType {
+enum ElfType {
     None,
     Relocatable,
     Executable,
@@ -233,28 +231,28 @@ enum ELFType {
     Invalid(u16),
 }
 
-impl ELFParslet for ELFType {
+impl Parslet for ElfType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match read_u16!(reader, descriptor) {
-            0x0000 => Ok(ELFType::None),
-            0x0001 => Ok(ELFType::Relocatable),
-            0x0002 => Ok(ELFType::Executable),
-            0x0003 => Ok(ELFType::Shared),
-            0x0004 => Ok(ELFType::Core),
-            0xFF00 => Ok(ELFType::LoProc),
-            0xFFFF => Ok(ELFType::HiProc),
-            b => Ok(ELFType::Invalid(b))
+            0x0000 => Ok(ElfType::None),
+            0x0001 => Ok(ElfType::Relocatable),
+            0x0002 => Ok(ElfType::Executable),
+            0x0003 => Ok(ElfType::Shared),
+            0x0004 => Ok(ElfType::Core),
+            0xFF00 => Ok(ElfType::LoProc),
+            0xFFFF => Ok(ElfType::HiProc),
+            b => Ok(ElfType::Invalid(b))
         }
     }
 }
 
 /**
- * ELFMachine
+ * Machine
  * 
- * Identifies which machine architecture an ELF file targets
+ * Identifies which machine architecture an Elf file targets
  */
 #[derive(Debug)]
-enum ELFMachine {
+enum Machine {
     None,
     AtmelAVR,
     AMD64,
@@ -264,52 +262,52 @@ enum ELFMachine {
     Invalid(u16),
 }
 
-impl ELFParslet for ELFMachine {
+impl Parslet for Machine {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match read_u16!(reader, descriptor) {
-            0x0000 => Ok(ELFMachine::None),
-            0x0028 => Ok(ELFMachine::ARM),
-            0x0053 => Ok(ELFMachine::AtmelAVR),
-            0x003E => Ok(ELFMachine::AMD64),
-            0x0064 => Ok(ELFMachine::ST200),
-            0x00F3 => Ok(ELFMachine::RISCV),
-            b => Ok(ELFMachine::Invalid(b))
+            0x0000 => Ok(Machine::None),
+            0x0028 => Ok(Machine::ARM),
+            0x0053 => Ok(Machine::AtmelAVR),
+            0x003E => Ok(Machine::AMD64),
+            0x0064 => Ok(Machine::ST200),
+            0x00F3 => Ok(Machine::RISCV),
+            b => Ok(Machine::Invalid(b))
         }
     }
 }
 
 /**
- * ELF file version. There is only one version, version one
+ * Elf file version. There is only one version, version one
  */
 #[derive(Debug)]
-enum ELFVersion {
+enum Version {
     Current,
     Invalid(u32)
 }
 
-impl ELFParslet for ELFVersion {
+impl Parslet for Version {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match read_u32!(reader, descriptor) {
-            0x01 => Ok(ELFVersion::Current),
-            b => Ok(ELFVersion::Invalid(b))
+            0x01 => Ok(Version::Current),
+            b => Ok(Version::Invalid(b))
         }
     }
 }
 
 /**
- * ELFFlags
+ * Flags
  */
-struct ELFFlags(u32);
+struct Flags(u32);
 
-impl ELFParslet for ELFFlags {
+impl Parslet for Flags {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match read_u32!(reader, descriptor) {
-            v => Ok(ELFFlags(v)),
+            v => Ok(Flags(v)),
         }
     }
 }
 
-impl std::fmt::Debug for ELFFlags {
+impl std::fmt::Debug for Flags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:#b}", self.0)
     }
@@ -323,20 +321,20 @@ impl std::fmt::Debug for ELFFlags {
 /* SECTIONS */
 
 /**
- * Represents one section in a loaded ELF binary
+ * Represents one section in a loaded Elf binary
  * 
  * This structure contains both a sections header along with the bytes it is responsible for
  */
 #[derive(Debug)]
-struct ELFSection {
-    header: ELFSectionHeader,
-    data: ELFSectionBytes,
+struct Section {
+    header: SectionHeader,
+    data: SectionData,
 }
 
-impl ELFParslet for ELFSection {
+impl Parslet for Section {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self>
     {
-        let header = ELFSectionHeader::parse(reader, descriptor)?;
+        let header = SectionHeader::parse(reader, descriptor)?;
         let cursor = reader.seek(SeekFrom::Current(0)).unwrap(); // Save the cursor to return to
         
         let section_size = header.section_size.as_usize();
@@ -344,15 +342,15 @@ impl ELFParslet for ELFSection {
 
         let mut data = Vec::new();
 
-        if header.ty != ELFSectionHeaderType::NoBits {
+        if header.ty != SectionHeaderType::NoBits {
             let _ = reader.seek(SeekFrom::Start(section_offs));
             data.append(&mut read_n_bytes!(reader, section_size));
             let _ = reader.seek(SeekFrom::Start(cursor));
         }
 
-        let section = ELFSection {
+        let section = Section {
             header: header,
-            data: ELFSectionBytes{ bytes: data },
+            data: SectionData{ bytes: data },
         };
 
         Ok(section)
@@ -360,37 +358,37 @@ impl ELFParslet for ELFSection {
 }
 
 /**
- * A section header describes the location as well as the contents of an ELF section
+ * A section header describes the location as well as the contents of an Elf section
  * 
- * ELF sections are parsed and represented by the ELFSection structure 
+ * Elf sections are parsed and represented by the Section structure 
  */
 #[derive(Debug)]
-struct ELFSectionHeader {
-    name: ELFAddress,
-    ty: ELFSectionHeaderType,
-    flags: ELFSectionFlags,
-    virtual_address: ELFAddress,
-    offset: ELFAddress,
-    section_size: ELFSize,
-    link: ELFWord,
-    info: ELFWord,
-    align: ELFSize,
-    entry_size: ELFSize,
+struct SectionHeader {
+    name: Address,
+    ty: SectionHeaderType,
+    flags: SectionFlags,
+    virtual_address: Address,
+    offset: Address,
+    section_size: Size,
+    link: Word,
+    info: Word,
+    align: Size,
+    entry_size: Size,
 }
 
-impl ELFParslet for ELFSectionHeader {
+impl Parslet for SectionHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        let section_header = ELFSectionHeader {
-            name: ELFAddress::parse(reader, descriptor)?,
-            ty: ELFSectionHeaderType::parse(reader, descriptor)?,
-            flags: ELFSectionFlags::parse(reader, descriptor)?,
-            virtual_address: ELFAddress::parse(reader, descriptor)?,
-            offset: ELFAddress::parse(reader, descriptor)?,
-            section_size: ELFSize::parse(reader, descriptor)?,
-            link: ELFWord::parse(reader, descriptor)?,
-            info: ELFWord::parse(reader, descriptor)?,
-            align: ELFSize::parse(reader, descriptor)?,
-            entry_size: ELFSize::parse(reader, descriptor)?,
+        let section_header = SectionHeader {
+            name: Address::parse(reader, descriptor)?,
+            ty: SectionHeaderType::parse(reader, descriptor)?,
+            flags: SectionFlags::parse(reader, descriptor)?,
+            virtual_address: Address::parse(reader, descriptor)?,
+            offset: Address::parse(reader, descriptor)?,
+            section_size: Size::parse(reader, descriptor)?,
+            link: Word::parse(reader, descriptor)?,
+            info: Word::parse(reader, descriptor)?,
+            align: Size::parse(reader, descriptor)?,
+            entry_size: Size::parse(reader, descriptor)?,
         };
 
         Ok(section_header)
@@ -398,7 +396,7 @@ impl ELFParslet for ELFSectionHeader {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum ELFSectionHeaderType {
+enum SectionHeaderType {
     Null,
     ProgramData,
     SymbolTable,
@@ -423,10 +421,10 @@ enum ELFSectionHeaderType {
 /**
  * This struct describes the contents of an individual section and is used to determine how a section should be processed
  */
-impl ELFParslet for ELFSectionHeaderType {
+impl Parslet for SectionHeaderType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
 
-        use ELFSectionHeaderType::*;
+        use SectionHeaderType::*;
         match read_u32!(reader, descriptor) {
             0x00 => Ok(Null),
             0x01 => Ok(ProgramData),
@@ -446,35 +444,35 @@ impl ELFParslet for ELFSectionHeaderType {
             0x11 => Ok(Group),
             0x12 => Ok(ExtendedSectionIndices),
 
-            v @ 0x60000000 ..= 0xFFFFFFFF => Ok(ELFSectionHeaderType::OSSpecific(v)),
-            v => Ok(ELFSectionHeaderType::Invalid(v))
+            v @ 0x60000000 ..= 0xFFFFFFFF => Ok(SectionHeaderType::OSSpecific(v)),
+            v => Ok(SectionHeaderType::Invalid(v))
         }
     }
 }
 
 /**
- * Section flags describe the allowable access patterns of an ELF section
+ * Section flags describe the allowable access patterns of an Elf section
  */
-enum ELFSectionFlags {
+enum SectionFlags {
     ELF32SectionFlags(u32),
     ELF64SectionFlags(u64)
 }
 
-impl ELFParslet for ELFSectionFlags {
+impl Parslet for SectionFlags {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         match descriptor.data_class() {
-            DataClass::Elf32 => Ok(ELFSectionFlags::ELF32SectionFlags(read_u32!(reader, descriptor))),
-            DataClass::Elf64 => Ok(ELFSectionFlags::ELF64SectionFlags(read_u64!(reader, descriptor))),
-            DataClass::Unknown => panic!("Attempted to parse ELF section flags with an unknown ELF class: {:?}"),
+            DataClass::Elf32 => Ok(SectionFlags::ELF32SectionFlags(read_u32!(reader, descriptor))),
+            DataClass::Elf64 => Ok(SectionFlags::ELF64SectionFlags(read_u64!(reader, descriptor))),
+            DataClass::Unknown => panic!("Attempted to parse Elf section flags with an unknown Elf class: {:?}"),
         }
     }
 }
 
-impl std::fmt::Debug for ELFSectionFlags {
+impl std::fmt::Debug for SectionFlags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ELFSectionFlags::ELF32SectionFlags(v) => write!(f, "{:#b}", v),
-            ELFSectionFlags::ELF64SectionFlags(v) => write!(f, "{:#b}", v),
+            SectionFlags::ELF32SectionFlags(v) => write!(f, "{:#b}", v),
+            SectionFlags::ELF64SectionFlags(v) => write!(f, "{:#b}", v),
         }
     }
 }
@@ -482,11 +480,11 @@ impl std::fmt::Debug for ELFSectionFlags {
 /**
  * Represents the raw binary data contained in one section
  */
-struct ELFSectionBytes {
+struct SectionData {
     bytes: Vec<u8>,
 }
 
-impl std::fmt::Debug for ELFSectionBytes {
+impl std::fmt::Debug for SectionData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let _ = write!(f, "[\n\t");
         for (i, byte) in self.bytes.iter().enumerate() {
@@ -507,48 +505,46 @@ impl std::fmt::Debug for ELFSectionBytes {
 /* PROGRAM HEADER */
 
 /**
- * ELFProgramHeader
- * 
  * Program headers are used to describe how sections are to be loaded into memory in order to construct an executable process
  */
 #[derive(Debug)]
-struct ELFProgramHeader {
-    ty: ELFProgramHeaderType,
-    flags: ELFProgramFlags,
-    offset: ELFAddress,
-    virtual_address: ELFAddress,
-    physical_address: ELFAddress,
-    file_size: ELFSize,
-    mem_size: ELFSize,
-    align: ELFSize
+struct ProgramHeader {
+    ty: ProgramHeaderType,
+    flags: ProgramHeaderFlags,
+    offset: Address,
+    virtual_address: Address,
+    physical_address: Address,
+    file_size: Size,
+    mem_size: Size,
+    align: Size
 }
 
-impl ELFParslet for ELFProgramHeader {
+impl Parslet for ProgramHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
 
         
-        let ty = ELFProgramHeaderType::parse(reader, descriptor)?;
+        let ty = ProgramHeaderType::parse(reader, descriptor)?;
         
         // If this is an ELF64 file, the program flags appear before the 'offset' value
-        let mut flags = ELFProgramFlags::Invalid(0);
+        let mut flags = ProgramHeaderFlags::Invalid(0);
         if descriptor.is_elf64() {
-            flags = ELFProgramFlags::parse(reader, descriptor)?;
+            flags = ProgramHeaderFlags::parse(reader, descriptor)?;
         }
         
-        let offset = ELFAddress::parse(reader, descriptor)?;
-        let virtual_address = ELFAddress::parse(reader, descriptor)?;
-        let physical_address = ELFAddress::parse(reader, descriptor)?;
-        let file_size = ELFSize::parse(reader, descriptor)?;
-        let mem_size = ELFSize::parse(reader, descriptor)?;
+        let offset = Address::parse(reader, descriptor)?;
+        let virtual_address = Address::parse(reader, descriptor)?;
+        let physical_address = Address::parse(reader, descriptor)?;
+        let file_size = Size::parse(reader, descriptor)?;
+        let mem_size = Size::parse(reader, descriptor)?;
 
         // If this is an ELF32 file, the program flags actually appear after the 'mem_size' value
         if descriptor.is_elf32() {
-            flags = ELFProgramFlags::parse(reader, descriptor)?;
+            flags = ProgramHeaderFlags::parse(reader, descriptor)?;
         }
 
-        let align = ELFSize::parse(reader, descriptor)?;
+        let align = Size::parse(reader, descriptor)?;
 
-        let program_header = ELFProgramHeader {
+        let program_header = ProgramHeader {
             ty,
             flags,
             offset,
@@ -564,12 +560,12 @@ impl ELFParslet for ELFProgramHeader {
 }
 
 /**
- * ELFProgramHeaderType
+ * ProgramHeaderType
  * 
  * Describes the way in which the section pointed to by a program header is to be processed
  */
 #[derive(Debug)]
-enum ELFProgramHeaderType {
+enum ProgramHeaderType {
     Null,
     Loadable,
     DynamicInfo,
@@ -582,10 +578,10 @@ enum ELFProgramHeaderType {
     Invalid(u32),
 }
 
-impl ELFParslet for ELFProgramHeaderType {
+impl Parslet for ProgramHeaderType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         
-        use ELFProgramHeaderType::*;
+        use ProgramHeaderType::*;
         match read_u32!(reader, descriptor) {
             0x00 => Ok(Null),
             0x01 => Ok(Loadable),
@@ -595,18 +591,18 @@ impl ELFParslet for ELFProgramHeaderType {
             0x05 => Ok(ShLib),
             0x06 => Ok(PHDR),
 
-            v @ 0x60000000 ..= 0x6FFFFFFF => Ok(ELFProgramHeaderType::OSSpecific(v)),
-            v @ 0x70000000 ..= 0x7FFFFFFF => Ok(ELFProgramHeaderType::ProcessorSpecific(v)),
-            v => Ok(ELFProgramHeaderType::Invalid(v))
+            v @ 0x60000000 ..= 0x6FFFFFFF => Ok(ProgramHeaderType::OSSpecific(v)),
+            v @ 0x70000000 ..= 0x7FFFFFFF => Ok(ProgramHeaderType::ProcessorSpecific(v)),
+            v => Ok(ProgramHeaderType::Invalid(v))
         }
     }
 }
 
 /**
- * Program flags describe the allowable access patterns of an ELF section
+ * Describe the allowable access patterns of an Elf section
  */
 #[derive(Debug)]
-enum ELFProgramFlags {
+enum ProgramHeaderFlags {
     Read,
     Write,
     Execute,
@@ -616,10 +612,10 @@ enum ELFProgramFlags {
     Invalid(u32),
 }
 
-impl ELFParslet for ELFProgramFlags {
+impl Parslet for ProgramHeaderFlags {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         
-        use ELFProgramFlags::*;
+        use ProgramHeaderFlags::*;
         match read_u32!(reader, descriptor) {
             0b100 => Ok(Read),
             0b010 => Ok(Write),
@@ -637,43 +633,50 @@ impl ELFParslet for ELFProgramFlags {
 /* LIB INTERFACE */
 
 /**
- * ELF
+ * Elf
  * 
- * Represents an ELF (Executable and Linkable Format) file.
+ * Represents an Elf (Executable and Linkable Format) file.
  * 
  * The Executable and Linkable Format is a common standard file format for executable files, object code,
  * shared libraries, and core dumps.
  * 
- * This type is responsible for loading, parsing, and modifying ELF files, and is used by the ARM
+ * This type is responsible for loading, parsing, and modifying Elf files, and is used by the ARM
  * program loader to construct an executable image.
  *  
  */
 #[derive(Debug)]
-pub struct ELF {
-    header: ELFHeader,
-    sections: Vec<ELFSection>,
-    program_headers: Vec<ELFProgramHeader>,
+pub struct Elf {
+    header: Header,
+    sections: Vec<Section>,
+    program_headers: Vec<ProgramHeader>,
 }
 
-impl ELF {
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> LoaderResult<ELF> {
+impl Elf {
+    pub fn load<P: AsRef<std::path::Path>>(path: P) -> LoaderResult<Elf> {
+        let file = std::fs::File::open(path).unwrap();
+        let mut buf = std::io::BufReader::new(file);
+        let elf = Elf::parse(&mut buf).unwrap();
+        Ok(elf)
+    }
+
+    pub fn parse<R: Read + Seek>(reader: &mut R) -> LoaderResult<Elf> {
         let mut descriptor = Descriptor::new();
 
-        let header = ELFHeader::parse(reader, &mut descriptor)?;
+        let header = Header::parse(reader, &mut descriptor)?;
 
         reader.seek(SeekFrom::Start(header.shoff.as_usize() as u64))?;
         let mut sections = Vec::new();
         for _ in 0..header.shnum.0 {
-            sections.push(ELFSection::parse(reader, &mut descriptor)?)
+            sections.push(Section::parse(reader, &mut descriptor)?)
         }
 
         reader.seek(SeekFrom::Start(header.phoff.as_usize() as u64))?;
         let mut program_headers = Vec::new();
         for _ in 0..header.phnum.0 {
-            program_headers.push(ELFProgramHeader::parse(reader, &mut descriptor)?)
+            program_headers.push(ProgramHeader::parse(reader, &mut descriptor)?)
         }
 
-        let parsed = ELF {
+        let parsed = Elf {
             header: header,
             sections: sections,
             program_headers: program_headers,
