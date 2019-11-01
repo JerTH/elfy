@@ -342,7 +342,7 @@ impl Parslet for Section {
 
         let mut data = Vec::new();
 
-        if header.ty != SectionHeaderType::NoBits {
+        if header.ty != SectionType::NoBits {
             let _ = reader.seek(SeekFrom::Start(section_offs));
             data.append(&mut read_n_bytes!(reader, section_size));
             let _ = reader.seek(SeekFrom::Start(cursor));
@@ -365,7 +365,7 @@ impl Parslet for Section {
 #[derive(Debug)]
 struct SectionHeader {
     name: Address,
-    ty: SectionHeaderType,
+    ty: SectionType,
     flags: SectionFlags,
     virtual_address: Address,
     offset: Address,
@@ -380,7 +380,7 @@ impl Parslet for SectionHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         let section_header = SectionHeader {
             name: Address::parse(reader, descriptor)?,
-            ty: SectionHeaderType::parse(reader, descriptor)?,
+            ty: SectionType::parse(reader, descriptor)?,
             flags: SectionFlags::parse(reader, descriptor)?,
             virtual_address: Address::parse(reader, descriptor)?,
             offset: Address::parse(reader, descriptor)?,
@@ -396,7 +396,7 @@ impl Parslet for SectionHeader {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum SectionHeaderType {
+enum SectionType {
     Null,
     ProgramData,
     SymbolTable,
@@ -421,10 +421,10 @@ enum SectionHeaderType {
 /**
  * This struct describes the contents of an individual section and is used to determine how a section should be processed
  */
-impl Parslet for SectionHeaderType {
+impl Parslet for SectionType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
 
-        use SectionHeaderType::*;
+        use SectionType::*;
         match read_u32!(reader, descriptor) {
             0x00 => Ok(Null),
             0x01 => Ok(ProgramData),
@@ -444,8 +444,8 @@ impl Parslet for SectionHeaderType {
             0x11 => Ok(Group),
             0x12 => Ok(ExtendedSectionIndices),
 
-            v @ 0x60000000 ..= 0xFFFFFFFF => Ok(SectionHeaderType::OSSpecific(v)),
-            v => Ok(SectionHeaderType::Invalid(v))
+            v @ 0x60000000 ..= 0xFFFFFFFF => Ok(SectionType::OSSpecific(v)),
+            v => Ok(SectionType::Invalid(v))
         }
     }
 }
@@ -676,6 +676,8 @@ impl Elf {
             program_headers.push(ProgramHeader::parse(reader, &mut descriptor)?)
         }
 
+        // associate sections with strtab items
+
         let parsed = Elf {
             header: header,
             sections: sections,
@@ -683,5 +685,9 @@ impl Elf {
         };
 
         Ok(parsed)
+    }
+
+    pub fn get_section(&self, name: &str) -> Option<Section> {
+        unimplemented!()
     }
 }
