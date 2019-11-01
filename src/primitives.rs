@@ -66,6 +66,12 @@ pub trait Parslet {
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Short(pub u16);
 
+impl Short {
+    pub fn as_usize(&self) -> usize {
+        self.0 as usize
+    }
+}
+
 impl Parslet for Short {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         Ok(Short(read_u16!(reader, descriptor)))

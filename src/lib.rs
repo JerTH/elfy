@@ -1,4 +1,6 @@
 use std::io::{ Read, Seek, SeekFrom };
+use std::collections::HashMap;
+use std::fmt::Display;
 
 #[macro_use]
 mod macros;
@@ -117,7 +119,7 @@ enum Magic {
 impl Parslet for Magic {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
         let bytes = read_n_bytes!(reader, 4);
-        if bytes.as_slice() == &ELF_MAGIC_BYTES[..] {
+        if bytes.as_slice() == &MAGIC_BYTES[..] {
             Ok(Magic::Valid)
         } else {
             Ok(Magic::Invalid)
@@ -326,34 +328,32 @@ impl std::fmt::Debug for Flags {
  * This structure contains both a sections header along with the bytes it is responsible for
  */
 #[derive(Debug)]
-struct Section {
+pub struct Section {
     header: SectionHeader,
     data: SectionData,
 }
 
+impl Section {
+}
+
 impl Parslet for Section {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self>
-    {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         let header = SectionHeader::parse(reader, descriptor)?;
-        let cursor = reader.seek(SeekFrom::Current(0)).unwrap(); // Save the cursor to return to
-        
-        let section_size = header.section_size.as_usize();
-        let section_offs = header.offset.as_usize() as u64;
-
-        let mut data = Vec::new();
-
-        if header.ty != SectionType::NoBits {
-            let _ = reader.seek(SeekFrom::Start(section_offs));
-            data.append(&mut read_n_bytes!(reader, section_size));
-            let _ = reader.seek(SeekFrom::Start(cursor));
-        }
+        let data = SectionData::parse_as(reader, &descriptor, &header)?;
 
         let section = Section {
             header: header,
-            data: SectionData{ bytes: data },
+            data: data
         };
 
         Ok(section)
+    }
+}
+
+impl Display for Section {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.header)?;
+        write!(f, "{:?}", self.data)
     }
 }
 
@@ -364,7 +364,7 @@ impl Parslet for Section {
  */
 #[derive(Debug)]
 struct SectionHeader {
-    name: Address,
+    name_index: Size,
     ty: SectionType,
     flags: SectionFlags,
     virtual_address: Address,
@@ -379,7 +379,7 @@ struct SectionHeader {
 impl Parslet for SectionHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
         let section_header = SectionHeader {
-            name: Address::parse(reader, descriptor)?,
+            name_index: Size::parse(reader, descriptor)?,
             ty: SectionType::parse(reader, descriptor)?,
             flags: SectionFlags::parse(reader, descriptor)?,
             virtual_address: Address::parse(reader, descriptor)?,
@@ -478,25 +478,49 @@ impl std::fmt::Debug for SectionFlags {
 }
 
 /**
- * Represents the raw binary data contained in one section
+ * Represents the parsed data contained in one section
  */
-struct SectionData {
-    bytes: Vec<u8>,
+#[derive(Debug)]
+enum SectionData {
+    Null,
+    ProgramData(Vec<u8>),
+    StringTable(Vec<String>),
+    OSSpecific(u32),
 }
 
-impl std::fmt::Debug for SectionData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let _ = write!(f, "[\n\t");
-        for (i, byte) in self.bytes.iter().enumerate() {
+impl SectionData {
+    fn parse_as<R: Read + Seek>(reader: &mut R, descriptor: &Descriptor, header: &SectionHeader) -> LoaderResult<SectionData> {
+        let position = reader.seek(SeekFrom::Current(0)).unwrap(); // Save our position as it may change to read a section
+        
+        let section_offs = header.offset.as_usize() as u64;
+        let _ = reader.seek(SeekFrom::Start(section_offs))?; // Move the readers position to the beginning of the section
+        
+        // Read the raw bytes of the section
+        let bytes = read_n_bytes!(reader, header.section_size.as_usize());
+        
+        let data = match header.ty {
 
-            if (i > 0) && (i % 16 == 0) {
-                let _ = write!(f, "\n\t");
-            }
+            // Program data is preserved as raw binary data, its meaning is defined by the consuming system
+            SectionType::ProgramData => {
+                SectionData::ProgramData(bytes)
+            },
+        
+            // Parse string tables as actual vectors of String
+            SectionType::StringTable => {
+                let splits = bytes.split(|c| *c == ('\0' as u8) ); 
+                
+                let mut strings: Vec<String> = Vec::new();
+                for slice in splits {
+                    let result = String::from_utf8(slice.to_vec());
+                    strings.push(result.unwrap());
+                }
+                SectionData::StringTable(strings)
+            },
+            _ => SectionData::Null,
+        };
 
-            let _ = write!(f, "{:02x} ", byte);
-            
-        }
-        write!(f, "\n]")
+        let _ = reader.seek(SeekFrom::Start(position))?; // Reset the readers position
+        Ok(data)
     }
 }
 
@@ -649,6 +673,7 @@ pub struct Elf {
     header: Header,
     sections: Vec<Section>,
     program_headers: Vec<ProgramHeader>,
+    
 }
 
 impl Elf {
@@ -663,20 +688,16 @@ impl Elf {
         let mut descriptor = Descriptor::new();
 
         let header = Header::parse(reader, &mut descriptor)?;
-
-        reader.seek(SeekFrom::Start(header.shoff.as_usize() as u64))?;
-        let mut sections = Vec::new();
-        for _ in 0..header.shnum.0 {
-            sections.push(Section::parse(reader, &mut descriptor)?)
-        }
-
-        reader.seek(SeekFrom::Start(header.phoff.as_usize() as u64))?;
-        let mut program_headers = Vec::new();
-        for _ in 0..header.phnum.0 {
-            program_headers.push(ProgramHeader::parse(reader, &mut descriptor)?)
-        }
+        let sections = Elf::parse_sections(reader, &mut descriptor, &header)?;
+        let program_headers = Elf::parse_program_headers(reader, &mut descriptor, &header)?;
 
         // associate sections with strtab items
+        if header.shstrndx != SHN_UNDEF {
+            let name_table: &Section = &sections[header.shstrndx.as_usize()];
+            let esize = name_table.header.entry_size;
+
+            //unimplemented!();
+        }
 
         let parsed = Elf {
             header: header,
@@ -687,7 +708,33 @@ impl Elf {
         Ok(parsed)
     }
 
-    pub fn get_section(&self, name: &str) -> Option<Section> {
-        unimplemented!()
+    fn parse_sections<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, elf_header: &Header) -> LoaderResult<Vec<Section>> {
+        reader.seek(SeekFrom::Start(elf_header.shoff.as_usize() as u64))?;
+        let mut sections = Vec::new();
+        for _ in 0..elf_header.shnum.0 {
+            sections.push(Section::parse(reader, descriptor)?)
+        }
+        Ok(sections)
+    }
+
+    fn parse_program_headers<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, elf_header: &Header) -> LoaderResult<Vec<ProgramHeader>> {
+        reader.seek(SeekFrom::Start(elf_header.phoff.as_usize() as u64))?;
+        let mut program_headers = Vec::new();
+        for _ in 0..elf_header.phnum.0 {
+            program_headers.push(ProgramHeader::parse(reader, descriptor)?)
+        }
+        Ok(program_headers)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn parse_thumbv7m_binary_0() {
+        let elf = Elf::load("examples/thumbv7m-binary-0");
+
+        println!("{:#?}", elf);
     }
 }
