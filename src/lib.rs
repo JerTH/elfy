@@ -453,6 +453,7 @@ impl Parslet for SectionType {
 /**
  * Section flags describe the allowable access patterns of an Elf section
  */
+#[derive(PartialEq, Eq)]
 enum SectionFlags {
     ELF32SectionFlags(u32),
     ELF64SectionFlags(u64)
@@ -749,12 +750,10 @@ mod test {
     use super::*;
 
     #[test]
-    fn parse_thumbv7m_binary_0() {
+    fn test_try_get_section() {
         let elf = Elf::load("examples/thumbv7m-binary-0").unwrap();
-        let text = elf.try_get_section(".text");
-        let armexidx = elf.try_get_section(".ARM.exidx");
+        let text = elf.try_get_section(".text").unwrap();
 
-        println!(".text:\n{:#?}", text);
-        println!(".ARM.exidx:\n{:#?}", armexidx);
+        assert_eq!(SectionFlags::ELF32SectionFlags(0b110), text.header.flags);
     }
 }
