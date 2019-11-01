@@ -483,13 +483,12 @@ impl std::fmt::Debug for SectionFlags {
 #[derive(Debug)]
 enum SectionData {
     Null,
-    ProgramData(Vec<u8>),
-    StringTable(Vec<String>),
-    OSSpecific(u32),
+    Bytes(Vec<u8>),
+    Strings(Vec<String>),
 }
 
 impl SectionData {
-    fn parse_as<R: Read + Seek>(reader: &mut R, descriptor: &Descriptor, header: &SectionHeader) -> LoaderResult<SectionData> {
+    fn parse_as<R: Read + Seek>(reader: &mut R, _descriptor: &Descriptor, header: &SectionHeader) -> LoaderResult<SectionData> {
         let position = reader.seek(SeekFrom::Current(0)).unwrap(); // Save our position as it may change to read a section
         
         let section_offs = header.offset.as_usize() as u64;
@@ -499,10 +498,13 @@ impl SectionData {
         let bytes = read_n_bytes!(reader, header.section_size.as_usize());
         
         let data = match header.ty {
+            SectionType::Null => {
+                SectionData::Null
+            },
 
             // Program data is preserved as raw binary data, its meaning is defined by the consuming system
             SectionType::ProgramData => {
-                SectionData::ProgramData(bytes)
+                SectionData::Bytes(bytes)
             },
         
             // Parse string tables as actual vectors of String
@@ -514,9 +516,12 @@ impl SectionData {
                     let result = String::from_utf8(slice.to_vec());
                     strings.push(result.unwrap());
                 }
-                SectionData::StringTable(strings)
+                SectionData::Strings(strings)
             },
-            _ => SectionData::Null,
+
+            _ => {
+                SectionData::Bytes(bytes)
+            },
         };
 
         let _ = reader.seek(SeekFrom::Start(position))?; // Reset the readers position
@@ -673,7 +678,7 @@ pub struct Elf {
     header: Header,
     sections: Vec<Section>,
     program_headers: Vec<ProgramHeader>,
-    
+    section_map: HashMap<String, usize>,
 }
 
 impl Elf {
@@ -690,22 +695,22 @@ impl Elf {
         let header = Header::parse(reader, &mut descriptor)?;
         let sections = Elf::parse_sections(reader, &mut descriptor, &header)?;
         let program_headers = Elf::parse_program_headers(reader, &mut descriptor, &header)?;
+        let mut section_map = HashMap::new();
 
-        // associate sections with strtab items
-        if header.shstrndx != SHN_UNDEF {
-            let name_table: &Section = &sections[header.shstrndx.as_usize()];
-            let esize = name_table.header.entry_size;
-
-            //unimplemented!();
-        }
+        Elf::associate_string_table(&mut section_map, &sections, &header);
 
         let parsed = Elf {
             header: header,
             sections: sections,
             program_headers: program_headers,
+            section_map: section_map
         };
 
         Ok(parsed)
+    }
+
+    pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
+        self.sections.get(*self.section_map.get(section_name)?)
     }
 
     fn parse_sections<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, elf_header: &Header) -> LoaderResult<Vec<Section>> {
@@ -725,6 +730,18 @@ impl Elf {
         }
         Ok(program_headers)
     }
+
+    fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &Vec<Section>, header: &Header) {
+        if header.shstrndx != SHN_UNDEF {
+            if let SectionData::Strings(table) = &sections[header.shstrndx.as_usize()].data {
+
+                for (i, _section) in sections.iter().enumerate() {
+                    let name = table[i].clone();
+                    section_map.insert(name, i);
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -733,8 +750,11 @@ mod test {
 
     #[test]
     fn parse_thumbv7m_binary_0() {
-        let elf = Elf::load("examples/thumbv7m-binary-0");
+        let elf = Elf::load("examples/thumbv7m-binary-0").unwrap();
+        let text = elf.try_get_section(".text");
+        let armexidx = elf.try_get_section(".ARM.exidx");
 
-        println!("{:#?}", elf);
+        println!(".text:\n{:#?}", text);
+        println!(".ARM.exidx:\n{:#?}", armexidx);
     }
 }
