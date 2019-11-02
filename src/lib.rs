@@ -269,13 +269,13 @@ enum Machine {
 impl Parslet for Machine {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u16!(reader, descriptor) {
-            0x0000 => Ok(Machine::None),
-            0x0028 => Ok(Machine::ARM),
-            0x0053 => Ok(Machine::AtmelAVR),
-            0x003E => Ok(Machine::AMD64),
-            0x0064 => Ok(Machine::ST200),
-            0x00F3 => Ok(Machine::RISCV),
-            b => Ok(Machine::Invalid(b))
+            MACHINE_NONE => Ok(Machine::None),
+            MACHINE_ARM => Ok(Machine::ARM),
+            MACHINE_ATMELAVR => Ok(Machine::AtmelAVR),
+            MACHINE_AMD64 => Ok(Machine::AMD64),
+            MACHINE_ST200 => Ok(Machine::ST200),
+            MACHINE_RISCV => Ok(Machine::RISCV),
+            v => Ok(Machine::Invalid(v))
         }
     }
 }
