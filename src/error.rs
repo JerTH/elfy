@@ -4,14 +4,14 @@ use std::fmt::{ Display, Formatter };
 #[derive(Debug)]
 pub enum ParseElfError {
     IoError(std::io::Error),
+    InvalidDataClass,
 }
 
 impl Error for ParseElfError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ParseElfError::IoError(inner) => {
-                Some(inner)
-            }
+            ParseElfError::IoError(inner) => Some(inner),
+            ParseElfError::InvalidDataClass => None,
         }
     }
 }

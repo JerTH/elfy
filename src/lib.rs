@@ -44,7 +44,7 @@ impl Parslet for Header {
         let ident = Identifier::parse(reader, descriptor)?;
 
         let header = Header {
-            ident: ident,
+            ident,
             ty: ElfType::parse(reader, descriptor)?,
             machine: Machine::parse(reader, descriptor)?,
             version: Version::parse(reader, descriptor)?,
@@ -344,8 +344,8 @@ impl Parslet for Section {
         let data = SectionData::parse_as(reader, &descriptor, &header)?;
 
         let section = Section {
-            header: header,
-            data: data
+            header,
+            data
         };
 
         Ok(section)
@@ -446,7 +446,7 @@ impl Parslet for SectionType {
             0x11 => Ok(Group),
             0x12 => Ok(ExtendedSectionIndices),
 
-            v @ 0x60000000 ..= 0xFFFFFFFF => Ok(SectionType::OSSpecific(v)),
+            v @ 0x6000_0000 ..= 0xFFFF_FFFF => Ok(SectionType::OSSpecific(v)),
             v => Ok(SectionType::Invalid(v))
         }
     }
@@ -520,7 +520,7 @@ impl SectionData {
         
             // Parse string tables as actual vectors of String
             SectionType::StringTable => {
-                let splits = bytes.split(|c| *c == ('\0' as u8) ); 
+                let splits = bytes.split(|c| *c == (b'\0') ); 
                 
                 let mut strings: Vec<String> = Vec::new();
                 for slice in splits {
@@ -566,10 +566,11 @@ impl Parslet for ProgramHeader {
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
         
         // If this is an ELF64 file, the program flags appear before the 'offset' value
-        let mut flags = ProgramHeaderFlags::Invalid(0);
-        if descriptor.is_elf64() {
-            flags = ProgramHeaderFlags::parse(reader, descriptor)?;
-        }
+        let mut flags = if descriptor.is_elf64() {
+            ProgramHeaderFlags::parse(reader, descriptor)?
+        } else {
+            ProgramHeaderFlags::Invalid(0)
+        };
         
         let offset = Address::parse(reader, descriptor)?;
         let virtual_address = Address::parse(reader, descriptor)?;
@@ -631,8 +632,8 @@ impl Parslet for ProgramHeaderType {
             0x05 => Ok(ShLib),
             0x06 => Ok(PHDR),
 
-            v @ 0x60000000 ..= 0x6FFFFFFF => Ok(ProgramHeaderType::OSSpecific(v)),
-            v @ 0x70000000 ..= 0x7FFFFFFF => Ok(ProgramHeaderType::ProcessorSpecific(v)),
+            v @ 0x6000_0000 ..= 0x6FFF_FFFF => Ok(ProgramHeaderType::OSSpecific(v)),
+            v @ 0x7000_0000 ..= 0x7FFF_FFFF => Ok(ProgramHeaderType::ProcessorSpecific(v)),
             v => Ok(ProgramHeaderType::Invalid(v))
         }
     }
@@ -704,12 +705,7 @@ impl Elf {
 
         associate_string_table(&mut section_map, &sections, &header);
 
-        let parsed = Elf {
-            header: header,
-            sections: sections,
-            program_headers: program_headers,
-            section_map: section_map
-        };
+        let parsed = Elf { header, sections, program_headers, section_map };
 
         Ok(parsed)
     }
@@ -740,7 +736,7 @@ fn parse_program_headers<R: Read + Seek>(reader: &mut R, descriptor: &mut Descri
 }
 
 
-fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &Vec<Section>, header: &Header) {
+fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &[Section], header: &Header) {
     if header.shstrndx != SHN_UNDEF {
         if let SectionData::Strings(table) = &sections[header.shstrndx.as_usize()].data {
             for (i, _section) in sections.iter().enumerate() {

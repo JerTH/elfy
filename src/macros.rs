@@ -18,7 +18,7 @@ macro_rules! read_byte {
     ($reader:expr) => {
         {
             let mut __bytes: [u8; 1] = [0; 1];
-            $reader.read(&mut __bytes)?;
+            $reader.read_exact(&mut __bytes)?;
             __bytes[0]
         }
     };
@@ -29,7 +29,7 @@ macro_rules! read_u16 {
         {
             let mut __bytes: [u8; 2] = [0; 2];
             let mut __temp: u16 = 0;
-            $reader.read(&mut __bytes)?;
+            $reader.read_exact(&mut __bytes)?;
             unsafe {
                 __temp = std::mem::transmute::<[u8; 2], u16>(__bytes);
 
@@ -47,7 +47,7 @@ macro_rules! read_u32 {
         {
             let mut __bytes: [u8; 4] = [0; 4];
             let mut __temp: u32 = 0;
-            $reader.read(&mut __bytes)?;
+            $reader.read_exact(&mut __bytes)?;
             unsafe {
                 __temp = std::mem::transmute::<[u8; 4], u32>(__bytes);
 
@@ -65,7 +65,7 @@ macro_rules! read_u64 {
         {
             let mut __bytes: [u8; 8] = [0; 8];
             let mut __temp: u64 = 0;
-            $reader.read(&mut __bytes)?;
+            $reader.read_exact(&mut __bytes)?;
             unsafe {
                 __temp = std::mem::transmute::<[u8; 8], u64>(__bytes);
 

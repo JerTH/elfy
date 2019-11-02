@@ -68,7 +68,7 @@ pub trait Parslet {
 pub struct Short(pub u16);
 
 impl Short {
-    pub fn as_usize(&self) -> usize {
+    pub fn as_usize(self) -> usize {
         self.0 as usize
     }
 }
@@ -131,15 +131,9 @@ impl Size {
 impl Parslet for Size {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match descriptor.data_class() {
-            DataClass::Elf32 => {
-                Ok(Size::Elf32Size(read_u32!(reader, descriptor)))
-            },
-            DataClass::Elf64 => {
-                Ok(Size::Elf64Size(read_u64!(reader, descriptor)))
-            },
-            DataClass::Unknown => {
-                panic!("Attempted to parse ELF size with an unknown ELF class: {:?}");
-            }
+            DataClass::Elf32 => Ok(Size::Elf32Size(read_u32!(reader, descriptor))),
+            DataClass::Elf64 => Ok(Size::Elf64Size(read_u64!(reader, descriptor))),
+            DataClass::Unknown => Err(ParseElfError::InvalidDataClass)
         }
     }
 }
@@ -181,15 +175,9 @@ impl Address {
 impl Parslet for Address {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match descriptor.data_class() {
-            DataClass::Elf32 => {
-                Ok(Address::Elf32Addr(read_u32!(reader, descriptor)))
-            },
-            DataClass::Elf64 => {
-                Ok(Address::Elf64Addr(read_u64!(reader, descriptor)))
-            },
-            DataClass::Unknown => {
-                panic!("Attempted to parse ELF address with an unknown ELF class: {:?}");
-            }
+            DataClass::Elf32 => Ok(Address::Elf32Addr(read_u32!(reader, descriptor))),
+            DataClass::Elf64 => Ok(Address::Elf64Addr(read_u64!(reader, descriptor))),
+            DataClass::Unknown => Err(ParseElfError::InvalidDataClass)
         }
     }
 }
