@@ -2,6 +2,8 @@ use std::io::{ Read, Seek, SeekFrom };
 use std::collections::HashMap;
 use std::fmt::Display;
 
+mod error;
+
 #[macro_use]
 mod macros;
 
@@ -38,7 +40,7 @@ struct Header {
 }
 
 impl Parslet for Header {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         let ident = Identifier::parse(reader, descriptor)?;
 
         let header = Header {
@@ -78,7 +80,7 @@ struct Identifier {
 }
 
 impl Parslet for Identifier {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         let parsed = Identifier {
             magic: Magic::parse(reader, descriptor)?,
             class: Class::parse(reader, descriptor)?,
@@ -117,7 +119,7 @@ enum Magic {
 }
 
 impl Parslet for Magic {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         let bytes = read_n_bytes!(reader, 4);
         if bytes.as_slice() == &MAGIC_BYTES[..] {
             Ok(Magic::Valid)
@@ -138,7 +140,7 @@ enum Class {
 }
 
 impl Parslet for Class {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
             0x01 => Ok(Class::ELF32),
             0x02 => Ok(Class::ELF64),
@@ -158,7 +160,7 @@ enum ELFData {
 }
 
 impl Parslet for ELFData {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
             0x01 => Ok(ELFData::LittleEndian),
             0x02 => Ok(ELFData::BigEndian),
@@ -174,7 +176,7 @@ enum ELFIdentVersion {
 }
 
 impl Parslet for ELFIdentVersion {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
             0x01 => Ok(ELFIdentVersion::Current), // Elf only has one version, version one. Nonetheless we parse it as "current"
             b => Ok(ELFIdentVersion::Invalid(b))
@@ -192,7 +194,7 @@ enum OsAbi {
 }
 
 impl Parslet for OsAbi {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
             0x00 => Ok(OsAbi::UNIXSystemV),
             b => Ok(OsAbi::Invalid(b))
@@ -210,7 +212,7 @@ enum AbiVersion {
 }
 
 impl Parslet for AbiVersion {
-    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
             0x00 => Ok(AbiVersion::Unspecified),
             b => Ok(AbiVersion::Version(b))
@@ -234,7 +236,7 @@ enum ElfType {
 }
 
 impl Parslet for ElfType {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u16!(reader, descriptor) {
             0x0000 => Ok(ElfType::None),
             0x0001 => Ok(ElfType::Relocatable),
@@ -265,7 +267,7 @@ enum Machine {
 }
 
 impl Parslet for Machine {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u16!(reader, descriptor) {
             0x0000 => Ok(Machine::None),
             0x0028 => Ok(Machine::ARM),
@@ -288,7 +290,7 @@ enum Version {
 }
 
 impl Parslet for Version {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u32!(reader, descriptor) {
             0x01 => Ok(Version::Current),
             b => Ok(Version::Invalid(b))
@@ -302,7 +304,7 @@ impl Parslet for Version {
 struct Flags(u32);
 
 impl Parslet for Flags {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u32!(reader, descriptor) {
             v => Ok(Flags(v)),
         }
@@ -337,7 +339,7 @@ impl Section {
 }
 
 impl Parslet for Section {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         let header = SectionHeader::parse(reader, descriptor)?;
         let data = SectionData::parse_as(reader, &descriptor, &header)?;
 
@@ -377,7 +379,7 @@ struct SectionHeader {
 }
 
 impl Parslet for SectionHeader {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         let section_header = SectionHeader {
             name_index: Size::parse(reader, descriptor)?,
             ty: SectionType::parse(reader, descriptor)?,
@@ -422,7 +424,7 @@ enum SectionType {
  * This struct describes the contents of an individual section and is used to determine how a section should be processed
  */
 impl Parslet for SectionType {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
 
         use SectionType::*;
         match read_u32!(reader, descriptor) {
@@ -453,28 +455,36 @@ impl Parslet for SectionType {
 /**
  * Section flags describe the allowable access patterns of an Elf section
  */
-#[derive(PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum SectionFlags {
-    ELF32SectionFlags(u32),
-    ELF64SectionFlags(u64)
+    None,
+    Write,
+    Alloc,
+    Execute,
+    WriteAlloc,
+    WriteExecute,
+    AllocExecute,
+    WriteAllocExecute,
+    ProcessorSpecific(Size),
 }
 
 impl Parslet for SectionFlags {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
-        match descriptor.data_class() {
-            DataClass::Elf32 => Ok(SectionFlags::ELF32SectionFlags(read_u32!(reader, descriptor))),
-            DataClass::Elf64 => Ok(SectionFlags::ELF64SectionFlags(read_u64!(reader, descriptor))),
-            DataClass::Unknown => panic!("Attempted to parse Elf section flags with an unknown Elf class: {:?}"),
-        }
-    }
-}
-
-impl std::fmt::Debug for SectionFlags {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SectionFlags::ELF32SectionFlags(v) => write!(f, "{:#b}", v),
-            SectionFlags::ELF64SectionFlags(v) => write!(f, "{:#b}", v),
-        }
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
+        let flags = Size::parse(reader, descriptor)?;
+        
+        use SectionFlags::*;
+        let section_flags = match flags.as_usize() {
+            0b000 => None,
+            0b001 => Write,
+            0b010 => Alloc,
+            0b100 => Execute,
+            0b011 => WriteAlloc,
+            0b101 => WriteExecute,
+            0b110 => AllocExecute,
+            0b111 => WriteAllocExecute,
+            _ => ProcessorSpecific(flags)
+        };
+        Ok(section_flags)
     }
 }
 
@@ -489,7 +499,7 @@ enum SectionData {
 }
 
 impl SectionData {
-    fn parse_as<R: Read + Seek>(reader: &mut R, _descriptor: &Descriptor, header: &SectionHeader) -> LoaderResult<SectionData> {
+    fn parse_as<R: Read + Seek>(reader: &mut R, _descriptor: &Descriptor, header: &SectionHeader) -> ParseElfResult<SectionData> {
         let position = reader.seek(SeekFrom::Current(0)).unwrap(); // Save our position as it may change to read a section
         
         let section_offs = header.offset.as_usize() as u64;
@@ -550,7 +560,7 @@ struct ProgramHeader {
 }
 
 impl Parslet for ProgramHeader {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
 
         
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
@@ -609,7 +619,7 @@ enum ProgramHeaderType {
 }
 
 impl Parslet for ProgramHeaderType {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         
         use ProgramHeaderType::*;
         match read_u32!(reader, descriptor) {
@@ -643,7 +653,7 @@ enum ProgramHeaderFlags {
 }
 
 impl Parslet for ProgramHeaderFlags {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         
         use ProgramHeaderFlags::*;
         match read_u32!(reader, descriptor) {
@@ -663,16 +673,10 @@ impl Parslet for ProgramHeaderFlags {
 /* LIB INTERFACE */
 
 /**
- * Elf
+ * Represents a parsed ELF (Executable and Linkable Format) file.
  * 
- * Represents an Elf (Executable and Linkable Format) file.
- * 
- * The Executable and Linkable Format is a common standard file format for executable files, object code,
+ * The ELF format is a common standard file format for executable files, object code,
  * shared libraries, and core dumps.
- * 
- * This type is responsible for loading, parsing, and modifying Elf files, and is used by the ARM
- * program loader to construct an executable image.
- *  
  */
 #[derive(Debug)]
 pub struct Elf {
@@ -683,22 +687,22 @@ pub struct Elf {
 }
 
 impl Elf {
-    pub fn load<P: AsRef<std::path::Path>>(path: P) -> LoaderResult<Elf> {
-        let file = std::fs::File::open(path).unwrap();
+    pub fn load<P: AsRef<std::path::Path>>(path: P) -> ParseElfResult<Elf> {
+        let file = std::fs::File::open(path)?;
         let mut buf = std::io::BufReader::new(file);
-        let elf = Elf::parse(&mut buf).unwrap();
+        let elf = Elf::parse(&mut buf)?;
         Ok(elf)
     }
 
-    pub fn parse<R: Read + Seek>(reader: &mut R) -> LoaderResult<Elf> {
+    pub fn parse<R: Read + Seek>(reader: &mut R) -> ParseElfResult<Elf> {
         let mut descriptor = Descriptor::new();
 
         let header = Header::parse(reader, &mut descriptor)?;
-        let sections = Elf::parse_sections(reader, &mut descriptor, &header)?;
-        let program_headers = Elf::parse_program_headers(reader, &mut descriptor, &header)?;
+        let sections = parse_sections(reader, &mut descriptor, &header)?;
+        let program_headers = parse_program_headers(reader, &mut descriptor, &header)?;
         let mut section_map = HashMap::new();
 
-        Elf::associate_string_table(&mut section_map, &sections, &header);
+        associate_string_table(&mut section_map, &sections, &header);
 
         let parsed = Elf {
             header: header,
@@ -712,38 +716,41 @@ impl Elf {
 
     pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
         self.sections.get(*self.section_map.get(section_name)?)
+    }    
+}
+
+
+fn parse_sections<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, header: &Header) -> ParseElfResult<Vec<Section>> {
+    reader.seek(SeekFrom::Start(header.shoff.as_u64()))?;
+    let mut sections = Vec::new();
+    for _ in 0..header.shnum.0 {
+        sections.push(Section::parse(reader, descriptor)?)
     }
+    Ok(sections)
+}
 
-    fn parse_sections<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, elf_header: &Header) -> LoaderResult<Vec<Section>> {
-        reader.seek(SeekFrom::Start(elf_header.shoff.as_usize() as u64))?;
-        let mut sections = Vec::new();
-        for _ in 0..elf_header.shnum.0 {
-            sections.push(Section::parse(reader, descriptor)?)
-        }
-        Ok(sections)
+
+fn parse_program_headers<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, header: &Header) -> ParseElfResult<Vec<ProgramHeader>> {
+    reader.seek(SeekFrom::Start(header.phoff.as_u64()))?;
+    let mut program_headers = Vec::new();
+    for _ in 0..header.phnum.0 {
+        program_headers.push(ProgramHeader::parse(reader, descriptor)?)
     }
+    Ok(program_headers)
+}
 
-    fn parse_program_headers<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, elf_header: &Header) -> LoaderResult<Vec<ProgramHeader>> {
-        reader.seek(SeekFrom::Start(elf_header.phoff.as_usize() as u64))?;
-        let mut program_headers = Vec::new();
-        for _ in 0..elf_header.phnum.0 {
-            program_headers.push(ProgramHeader::parse(reader, descriptor)?)
-        }
-        Ok(program_headers)
-    }
 
-    fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &Vec<Section>, header: &Header) {
-        if header.shstrndx != SHN_UNDEF {
-            if let SectionData::Strings(table) = &sections[header.shstrndx.as_usize()].data {
-
-                for (i, _section) in sections.iter().enumerate() {
-                    let name = table[i].clone();
-                    section_map.insert(name, i);
-                }
+fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &Vec<Section>, header: &Header) {
+    if header.shstrndx != SHN_UNDEF {
+        if let SectionData::Strings(table) = &sections[header.shstrndx.as_usize()].data {
+            for (i, _section) in sections.iter().enumerate() {
+                let name = table[i].clone();
+                section_map.insert(name, i);
             }
         }
     }
 }
+
 
 #[cfg(test)]
 mod test {
@@ -754,6 +761,8 @@ mod test {
         let elf = Elf::load("examples/thumbv7m-binary-0").unwrap();
         let text = elf.try_get_section(".text").unwrap();
 
-        assert_eq!(SectionFlags::ELF32SectionFlags(0b110), text.header.flags);
+        assert_eq!(SectionFlags::AllocExecute, text.header.flags);
+
+        println!("{:#?}", elf);
     }
 }

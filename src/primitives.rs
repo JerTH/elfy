@@ -1,11 +1,12 @@
 use std::convert::TryInto;
 use std::io::{ Read, Seek };
 
+use crate::error::ParseElfError;
 
 /**
  * Returned by ELFParslets
  */
-pub type LoaderResult<T> = std::io::Result<T>;
+pub type ParseElfResult<T> = std::result::Result<T, ParseElfError>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DataFormat {
@@ -55,7 +56,7 @@ impl Descriptor {
  * Trait used to define how individual parts of the ELF binary structure should be parsed
  */
 pub trait Parslet {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> where Self: Sized;
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> where Self: Sized;
 }
 
 /**
@@ -73,7 +74,7 @@ impl Short {
 }
 
 impl Parslet for Short {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         Ok(Short(read_u16!(reader, descriptor)))
     }
 }
@@ -93,7 +94,7 @@ impl std::fmt::Debug for Short {
 pub struct Word(pub u32);
 
 impl Parslet for Word {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         Ok(Word(read_u32!(reader, descriptor)))
     }
 }
@@ -121,10 +122,14 @@ impl Size {
             Size::Elf64Size(v) => (*v).try_into().unwrap()
         }
     }
+
+    pub fn as_u64(&self) -> u64 {
+        self.as_usize() as u64
+    }
 }
 
 impl Parslet for Size {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match descriptor.data_class() {
             DataClass::Elf32 => {
                 Ok(Size::Elf32Size(read_u32!(reader, descriptor)))
@@ -174,7 +179,7 @@ impl Address {
 }
 
 impl Parslet for Address {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> LoaderResult<Self> {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match descriptor.data_class() {
             DataClass::Elf32 => {
                 Ok(Address::Elf32Addr(read_u32!(reader, descriptor)))
