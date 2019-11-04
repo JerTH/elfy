@@ -3,15 +3,16 @@ use std::fmt::{ Display, Formatter };
 
 #[derive(Debug)]
 pub enum ParseElfError {
-    IoError(std::io::Error),
+    IoError{ inner: std::io::Error },
     InvalidDataClass,
+    InvalidSectionType{ section_type: u32 },
 }
 
 impl Error for ParseElfError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ParseElfError::IoError(inner) => Some(inner),
-            ParseElfError::InvalidDataClass => None,
+            ParseElfError::IoError{ inner } => Some(inner),
+            _ => None,
         }
     }
 }
@@ -24,6 +25,6 @@ impl Display for ParseElfError {
 
 impl From<std::io::Error> for ParseElfError {
     fn from(err: std::io::Error) -> ParseElfError {
-        ParseElfError::IoError(err)
+        ParseElfError::IoError{ inner: err }
     }
 }

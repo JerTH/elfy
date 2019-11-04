@@ -1,8 +1,15 @@
+#![warn(missing_docs)]
+
+//! A crate for reading data from ELF files quickly and simply
+//! 
+//! Currently Elfy is focused on reading data important to statically compiled ARM executables, in the future it will support more architectures
+//! and ELF features
+
 use std::io::{ Read, Seek, SeekFrom };
 use std::collections::HashMap;
-use std::fmt::Display;
 
 mod error;
+use crate::error::ParseElfError;
 
 #[macro_use]
 mod macros;
@@ -13,16 +20,12 @@ use crate::constants::*;
 mod primitives;
 use crate::primitives::*;
 
-/* Elf FILE HEADER */
-
-/**
- * Represents an Elf file header
- * 
- * This header is used to identify and process the rest of an Elf file, it includes offsets to the program
- * header table and the section header table
- */
+/// Represents an ELF file header
+/// 
+/// This header is used to identify and process the rest of an Elf file, it includes offsets to
+/// the program header table and the section header table
 #[derive(Debug)]
-struct Header {
+pub struct Header {
     ident: Identifier,
     ty: ElfType,
     machine: Machine,
@@ -64,11 +67,6 @@ impl Parslet for Header {
     } 
 }
 
-/**
- * Identifier
- * 
- * Used to validate an Elf file, and identify the format of its contents
- */
 #[derive(Debug)]
 struct Identifier {
     magic: Magic,
@@ -91,8 +89,8 @@ impl Parslet for Identifier {
         };
 
         descriptor.class = match parsed.class {
-            Class::ELF32 => DataClass::Elf32,
-            Class::ELF64 => DataClass::Elf64,
+            Class::Elf32 => DataClass::Elf32,
+            Class::Elf64 => DataClass::Elf64,
             Class::Invalid(_) => DataClass::Unknown,
         };
 
@@ -109,10 +107,7 @@ impl Parslet for Identifier {
     } 
 }
 
-/**
- * Elf magic. Identifies a file as Elf
- */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Magic {
     Valid,
     Invalid,
@@ -129,29 +124,23 @@ impl Parslet for Magic {
     }
 }
 
-/**
- * Identifies an Elf binary as being either 32 or 64 bit
- */
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Class {
-    ELF32,
-    ELF64,
+    Elf32,
+    Elf64,
     Invalid(u8)
 }
 
 impl Parslet for Class {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
-            0x01 => Ok(Class::ELF32),
-            0x02 => Ok(Class::ELF64),
+            0x01 => Ok(Class::Elf32),
+            0x02 => Ok(Class::Elf64),
             b => Ok(Class::Invalid(b))
         }
     }
 }
 
-/**
- * Identifies the format of an Elf file, 2's Complement Little Endian or Big Endian
- */
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum ELFData {
     LittleEndian,
@@ -184,28 +173,22 @@ impl Parslet for ELFIdentVersion {
     }
 }
 
-/**
- * OsAbi
- */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum OsAbi {
-    UNIXSystemV,
+    UnixSystemV,
     Invalid(u8)
 }
 
 impl Parslet for OsAbi {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
-            0x00 => Ok(OsAbi::UNIXSystemV),
+            0x00 => Ok(OsAbi::UnixSystemV),
             b => Ok(OsAbi::Invalid(b))
         }
     }
 }
 
-/**
- * AbiVersion
- */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum AbiVersion {
     Unspecified,
     Version(u8),
@@ -220,10 +203,7 @@ impl Parslet for AbiVersion {
     }
 }
 
-/**
- * ElfType
- */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum ElfType {
     None,
     Relocatable,
@@ -250,12 +230,7 @@ impl Parslet for ElfType {
     }
 }
 
-/**
- * Machine
- * 
- * Identifies which machine architecture an Elf file targets
- */
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Machine {
     None,
     AtmelAVR,
@@ -280,10 +255,8 @@ impl Parslet for Machine {
     }
 }
 
-/**
- * Elf file version. There is only one version, version one
- */
-#[derive(Debug)]
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Version {
     Current,
     Invalid(u32)
@@ -327,7 +300,7 @@ impl std::fmt::Debug for Flags {
 /**
  * Represents one section in a loaded Elf binary
  * 
- * This structure contains both a sections header along with the bytes it is responsible for
+ * This structure contains both a sections as well as the parsed data which that header points to
  */
 #[derive(Debug)]
 pub struct Section {
@@ -336,6 +309,15 @@ pub struct Section {
 }
 
 impl Section {
+    /// Returns a reference to a 'SectionData' instance which contains the parsed data contained by the section
+    pub fn data(&self) -> &SectionData {
+        &self.data
+    }
+
+    /// Returns a reference to the sections header
+    pub fn header(&self) -> &SectionHeader {
+        &self.header
+    }
 }
 
 impl Parslet for Section {
@@ -352,23 +334,19 @@ impl Parslet for Section {
     }
 }
 
-impl Display for Section {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.header)?;
-        write!(f, "{:?}", self.data)
-    }
-}
 
-/**
- * A section header describes the location as well as the contents of an Elf section
- * 
- * Elf sections are parsed and represented by the Section structure 
- */
+ 
+/// A 'SectionHeader' describes the location and the contents of an Elf section
 #[derive(Debug)]
-struct SectionHeader {
+pub struct SectionHeader {
     name_index: Size,
-    ty: SectionType,
-    flags: SectionFlags,
+
+    /// Describes the type of information contained within a section
+    pub ty: SectionType,
+
+    /// The flags used to mark this section
+    pub flags: SectionFlags,
+
     virtual_address: Address,
     offset: Address,
     section_size: Size,
@@ -397,74 +375,124 @@ impl Parslet for SectionHeader {
     }
 }
 
+/// Describes the type of information contained within a section
 #[derive(Debug, PartialEq, Eq)]
-enum SectionType {
+pub enum SectionType {
+    /// Marks a section as inactive
+    /// 
+    /// Section headers with the type 'Null' do not have a corresponding section in the file
     Null,
+
+    /// Marks a section as containing data whose meaning is defined entirely by the program
     ProgramData,
+
+    /// Marks a section as containing a symbol table
     SymbolTable,
+
+    /// Marks a section as containing a string table, there may be multiple string tables in a given ELF file
     StringTable,
+
+    /// Marks a section as containing relocation data with explicit addends
     RelocationWithAddends,
+
+    /// Marks a section as containing a symbol hash table
     SymbolHashTable,
+
+    /// Marks a section as containing information for dynamic linking
     DynamicInfo,
+
+    /// Marks a section as containing arbitrary information used to mark the section in some way
+    /// 
+    /// This information is usually generated by some part of the toolchain used to produce the ELF file
     Note,
+
+    /// Marks a section as containing no data, but otherwise resembles a 'ProgramData' section
     NoBits,
+
+    /// Marks a section as containing relocation data without explicit addends
     Relocation,
+
+    /// This section type is reserved and should not be used. ELF files which contain a section of this type do not conform to the ABI
     ShLib,
+
+    /// Marks a section as containing a minimal symbol table used for dynamic linking
     DynamicSymbolTable,
+
+    /// Marks a section as containing constructors
     InitArray,
+
+    /// Marks a section as containing destructors
     FiniArray,
+
+    /// Marks a section as containing pre-constructors
     PreInitArray,
+
+    #[allow(missing_docs)]
     Group,
+    #[allow(missing_docs)]
     ExtendedSectionIndices,
+
+    /// Section contains information defined by and specific to the operating system
     OSSpecific(u32),
-    Invalid(u32)
 }
 
-/**
- * This struct describes the contents of an individual section and is used to determine how a section should be processed
- */
+/// Describes the contents of an individual section which is used to determine how a section should be processed
 impl Parslet for SectionType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
 
         use SectionType::*;
+        use constants::section_types::*;
+
         match read_u32!(reader, descriptor) {
-            0x00 => Ok(Null),
-            0x01 => Ok(ProgramData),
-            0x02 => Ok(SymbolTable),
-            0x03 => Ok(StringTable),
-            0x04 => Ok(RelocationWithAddends),
-            0x05 => Ok(SymbolHashTable),
-            0x06 => Ok(DynamicInfo),
-            0x07 => Ok(Note),
-            0x08 => Ok(NoBits),
-            0x09 => Ok(Relocation),
-            0x0A => Ok(ShLib),
-            0x0B => Ok(DynamicSymbolTable),
-            0x0E => Ok(InitArray),
-            0x0F => Ok(FiniArray),
-            0x10 => Ok(PreInitArray),
-            0x11 => Ok(Group),
-            0x12 => Ok(ExtendedSectionIndices),
+            NULL => Ok(Null),
+            PROG_DATA => Ok(ProgramData),
+            SYM_TABLE => Ok(SymbolTable),
+            STR_TABLE => Ok(StringTable),
+            REL_A => Ok(RelocationWithAddends),
+            SYM_HASH => Ok(SymbolHashTable),
+            DYN_INFO => Ok(DynamicInfo),
+            NOTE => Ok(Note),
+            NO_BITS => Ok(NoBits),
+            RELOCATION => Ok(Relocation),
+            SHLIB => Ok(ShLib),
+            DYN_SYM_TAB => Ok(DynamicSymbolTable),
+            INIT => Ok(InitArray),
+            FINI => Ok(FiniArray),
+            PRE_INIT => Ok(PreInitArray),
+            GROUP => Ok(Group),
+            EXT_IDX => Ok(ExtendedSectionIndices),
 
             v @ 0x6000_0000 ..= 0xFFFF_FFFF => Ok(SectionType::OSSpecific(v)),
-            v => Ok(SectionType::Invalid(v))
+            v => Err(ParseElfError::InvalidSectionType{ section_type: v })
         }
     }
 }
 
-/**
- * Section flags describe the allowable access patterns of an Elf section
- */
+/// Section flags describe the allowable access patterns of an Elf section
 #[derive(Debug, PartialEq, Eq)]
-enum SectionFlags {
+pub enum SectionFlags {
+    /// No section flags
     None,
+
+    /// Section is writable at runtime
     Write,
+    
+    /// Section occupies space in memory at runtime
     Alloc,
+    
+    /// Section contains executable code
     Execute,
+
+    #[allow(missing_docs)]    
     WriteAlloc,
+    #[allow(missing_docs)]    
     WriteExecute,
+    #[allow(missing_docs)]    
     AllocExecute,
+    #[allow(missing_docs)]    
     WriteAllocExecute,
+
+    /// Flags with meaning defined by the target processor
     ProcessorSpecific(Size),
 }
 
@@ -488,13 +516,16 @@ impl Parslet for SectionFlags {
     }
 }
 
-/**
- * Represents the parsed data contained in one section
- */
+/// Represents the parsed data contained in one section
 #[derive(Debug)]
-enum SectionData {
+pub enum SectionData {
+    /// Section contains no data
     Null,
+
+    /// Section contains binary data, such as executable code
     Bytes(Vec<u8>),
+
+    /// Section contains null-terminated Utf8 strings
     Strings(Vec<String>),
 }
 
@@ -565,7 +596,7 @@ impl Parslet for ProgramHeader {
         
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
         
-        // If this is an ELF64 file, the program flags appear before the 'offset' value
+        // If this is an Elf64 file, the program flags appear before the 'offset' value
         let mut flags = if descriptor.is_elf64() {
             ProgramHeaderFlags::parse(reader, descriptor)?
         } else {
@@ -578,7 +609,7 @@ impl Parslet for ProgramHeader {
         let file_size = Size::parse(reader, descriptor)?;
         let mem_size = Size::parse(reader, descriptor)?;
 
-        // If this is an ELF32 file, the program flags actually appear after the 'mem_size' value
+        // If this is an Elf32 file, the program flags actually appear after the 'mem_size' value
         if descriptor.is_elf32() {
             flags = ProgramHeaderFlags::parse(reader, descriptor)?;
         }
@@ -639,9 +670,6 @@ impl Parslet for ProgramHeaderType {
     }
 }
 
-/**
- * Describe the allowable access patterns of an Elf section
- */
 #[derive(Debug)]
 enum ProgramHeaderFlags {
     Read,
@@ -688,6 +716,17 @@ pub struct Elf {
 }
 
 impl Elf {
+    /// Loads an ELF file from disk and parses it
+    /// 
+    /// # Errors
+    /// 
+    /// Returns 'Err' if the file can not be loaded or if parsing fails, with a description of the failure
+    /// 
+    /// # Examples
+    /// ```
+    /// # use crate::elfy::*;    
+    /// let elf = Elf::load("examples/example-binary").unwrap();
+    /// ```
     pub fn load<P: AsRef<std::path::Path>>(path: P) -> ParseElfResult<Elf> {
         let file = std::fs::File::open(path)?;
         let mut buf = std::io::BufReader::new(file);
@@ -695,6 +734,21 @@ impl Elf {
         Ok(elf)
     }
 
+    /// Parses an ELF file from a reader source
+    /// 
+    /// 'reader' can be anything that implements both 'Read' and 'Seek'
+    /// 
+    /// # Errors
+    /// 
+    /// Returns 'Err' if parsing fails, with a description of what caused the failure
+    /// 
+    /// # Examples
+    /// ```
+    /// # use crate::elfy::*;    
+    /// # let file = std::fs::File::open("examples/example-binary").unwrap();
+    /// let mut buf = std::io::BufReader::new(file);
+    /// let elf = Elf::parse(&mut buf).unwrap();
+    /// ```
     pub fn parse<R: Read + Seek>(reader: &mut R) -> ParseElfResult<Elf> {
         let mut descriptor = Descriptor::new();
 
@@ -710,6 +764,17 @@ impl Elf {
         Ok(parsed)
     }
 
+    /// Tries to retrieve a section by name, returns 'None' if the section does not exist
+    /// 
+    /// # Examples
+    /// ```
+    /// # use crate::elfy::*;
+    /// 
+    /// let elf = Elf::load("examples/example-binary").unwrap();
+    /// let text = elf.try_get_section(".text").unwrap();
+    /// 
+    /// assert_eq!(SectionFlags::AllocExecute, text.header().flags);
+    /// ```
     pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
         self.sections.get(*self.section_map.get(section_name)?)
     }    
@@ -752,13 +817,54 @@ fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &[
 mod test {
     use super::*;
 
+    fn load_example_binary() -> Elf {
+        let elf = Elf::load("examples/example-binary").unwrap();
+        elf
+    }
+
+    #[test]
+    fn test_parse_elf_header() {
+        let elf = load_example_binary();
+
+        let header = &elf.header;
+        let ident = &header.ident;
+        assert_eq!(Magic::Valid, ident.magic);
+        assert_eq!(Class::Elf32, ident.class);
+        assert_eq!(ELFData::LittleEndian, ident.data);
+        assert_eq!(OsAbi::UnixSystemV, ident.os_abi);
+        assert_eq!(AbiVersion::Unspecified, ident.abi_ver);
+
+        assert_eq!(ElfType::Executable, header.ty);
+        assert_eq!(Machine::ARM, header.machine);
+        assert_eq!(Version::Current, header.version);
+        assert_eq!(Address::Elf32Addr(0x11001), header.entry);
+        assert_eq!(Size::Elf32Size(52), header.phoff);
+        assert_eq!(Size::Elf32Size(8428), header.shoff);
+        // TODO: Test flags (Flags type should be rewritten as a more descriptive enum)
+        assert_eq!(Short(52), header.ehsize);
+        assert_eq!(Short(32), header.phentsize);
+        assert_eq!(Short(5), header.phnum);
+        assert_eq!(Short(40), header.shentsize);
+        assert_eq!(Short(8), header.shnum);
+        assert_eq!(Short(6), header.shstrndx);
+    }
+
     #[test]
     fn test_try_get_section() {
-        let elf = Elf::load("examples/thumbv7m-binary-0").unwrap();
+        let elf = load_example_binary();
         let text = elf.try_get_section(".text").unwrap();
 
         assert_eq!(SectionFlags::AllocExecute, text.header.flags);
+    }
 
-        println!("{:#?}", elf);
+    #[test]
+    fn test_try_get_fake_section() {
+        let elf = load_example_binary();        
+        println!("{:#?}", &elf);
+
+        // We can be reasonably certain that no section with this name exists
+        assert!(elf.try_get_section(".j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
+        assert!(elf.try_get_section("_j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
+        assert!(elf.try_get_section("j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
     }
 }

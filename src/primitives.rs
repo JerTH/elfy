@@ -186,10 +186,10 @@ impl std::fmt::Debug for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Address::Elf32Addr(v) => {
-                write!(f, "{:#010X}", v)
+                write!(f, "{:#X}", v)
             },
             Address::Elf64Addr(v) => {
-                write!(f, "{:#010X}", v)
+                write!(f, "{:#X}", v)
             }
         }
     }
