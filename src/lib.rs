@@ -860,11 +860,20 @@ mod test {
     #[test]
     fn test_try_get_fake_section() {
         let elf = load_example_binary();        
-        println!("{:#?}", &elf);
 
         // We can be reasonably certain that no section with this name exists
         assert!(elf.try_get_section(".j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
         assert!(elf.try_get_section("_j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
         assert!(elf.try_get_section("j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
+    }
+
+    #[test]
+    fn test_get_bytes_data() {
+        let elf = load_example_binary();        
+        let text = elf.try_get_section(".text").unwrap();
+        
+        if let SectionData::Bytes(bytes) = text.data() {
+            // do something with bytes
+        }
     }
 }
