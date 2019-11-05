@@ -1,4 +1,6 @@
 # Elfy
+![Build Status](https://travis-ci.org/JerTH/elfy.svg?branch=master)
+![Docs](https://docs.rs/elfy/badge.svg)
 
 [Documentation](https://docs.rs/elfy)
 
