@@ -33,3 +33,12 @@ pub mod section_types {
     pub const GROUP: u32 = 0x11;
     pub const EXT_IDX: u32 = 0x12;
 }
+
+pub mod program_flags {
+    pub const READ: u32 = 0b100;
+    pub const WRITE: u32 = 0b010;
+    pub const EXEC: u32 = 0b001;
+    pub const READ_WRITE: u32 = 0b110;
+    pub const READ_EXEC: u32 = 0b101;
+    pub const READ_WRITE_EXEC: u32 = 0b111;
+}

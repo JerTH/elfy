@@ -573,11 +573,7 @@ impl SectionData {
 
 
 
-/* PROGRAM HEADER */
-
-/**
- * Program headers are used to describe how sections are to be loaded into memory in order to construct an executable process
- */
+/// Program headers are used to describe how sections are to be loaded into memory in order to construct an executable process
 #[derive(Debug)]
 struct ProgramHeader {
     ty: ProgramHeaderType,
@@ -595,13 +591,12 @@ impl Parslet for ProgramHeader {
 
         
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
-        
+        let mut flags = ProgramHeaderFlags::None;
+
         // If this is an Elf64 file, the program flags appear before the 'offset' value
-        let mut flags = if descriptor.is_elf64() {
-            ProgramHeaderFlags::parse(reader, descriptor)?
-        } else {
-            ProgramHeaderFlags::Invalid(0)
-        };
+        if descriptor.is_elf64() {
+            flags = ProgramHeaderFlags::parse(reader, descriptor)?;
+        }
         
         let offset = Address::parse(reader, descriptor)?;
         let virtual_address = Address::parse(reader, descriptor)?;
@@ -672,27 +667,29 @@ impl Parslet for ProgramHeaderType {
 
 #[derive(Debug)]
 enum ProgramHeaderFlags {
+    None,
     Read,
     Write,
     Execute,
     ReadWrite,
     ReadExecute,
     ReadWriteExecute,
-    Invalid(u32),
 }
 
 impl Parslet for ProgramHeaderFlags {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         
         use ProgramHeaderFlags::*;
+        use constants::program_flags::*;
+
         match read_u32!(reader, descriptor) {
-            0b100 => Ok(Read),
-            0b010 => Ok(Write),
-            0b001 => Ok(Execute),
-            0b110 => Ok(ReadWrite),
-            0b101 => Ok(ReadExecute),
-            0b111 => Ok(ReadWriteExecute),
-            v => Ok(Invalid(v))
+            READ => Ok(Read),
+            WRITE => Ok(Write),
+            EXEC => Ok(Execute),
+            READ_WRITE => Ok(ReadWrite),
+            READ_EXEC => Ok(ReadExecute),
+            READ_WRITE_EXEC => Ok(ReadWriteExecute),
+            v => Err(ParseElfError::InvalidProgramFlags{ flags: v })
         }
     }
 }
@@ -828,6 +825,8 @@ mod test {
 
         let header = &elf.header;
         let ident = &header.ident;
+
+        // Assert some known values in the test binary were parsed correctly
         assert_eq!(Magic::Valid, ident.magic);
         assert_eq!(Class::Elf32, ident.class);
         assert_eq!(ELFData::LittleEndian, ident.data);

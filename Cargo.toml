@@ -1,6 +1,6 @@
 [package]
 name = "elfy"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["JerTH <jeremyhatcher27@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -14,5 +14,3 @@ keywords = ["ELF", "unix", "arm"]
 homepage = "https://github.com/JerTH/elfy"
 documentation = "https://docs.rs/elfy"
 repository = "https://github.com/JerTH/elfy"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

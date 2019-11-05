@@ -6,6 +6,7 @@ pub enum ParseElfError {
     IoError{ inner: std::io::Error },
     InvalidDataClass,
     InvalidSectionType{ section_type: u32 },
+    InvalidProgramFlags{ flags: u32 },
 }
 
 impl Error for ParseElfError {

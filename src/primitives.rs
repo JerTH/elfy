@@ -3,9 +3,7 @@ use std::io::{ Read, Seek };
 
 use crate::error::ParseElfError;
 
-/**
- * Returned by ELFParslets
- */
+/// Returned by ELFParslets
 pub type ParseElfResult<T> = std::result::Result<T, ParseElfError>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
