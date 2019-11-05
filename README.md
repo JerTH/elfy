@@ -43,7 +43,7 @@ fn main() {
 
     // The .text section usually contains executable machine code and as such will be
     // parsed as raw binary data. Here we retrieve a vector of that data in `bytes` 
-    if let SectionData::Bytes(bytes).iter() = text.data() {
+    if let SectionData::Bytes(bytes) = text.data() {
         // ...
     }
 
