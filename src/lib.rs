@@ -12,11 +12,11 @@ use std::collections::HashMap;
 
 #[macro_use]
 mod macros;
-
-pub mod constants;
+pub mod types;
 pub mod numeric;
 
-mod types;
+pub mod constants;
+
 use crate::types::*;
 
 /// The result type for Elfy, wraps a `ParseElfError`
@@ -123,10 +123,6 @@ impl Descriptor {
 
 
 
-
-
-/* LIB INTERFACE */
-
 /**
  * Represents a parsed ELF (Executable and Linkable Format) file.
  * 
@@ -202,7 +198,7 @@ impl Elf {
     /// let elf = Elf::load("examples/example-binary").unwrap();
     /// let text = elf.try_get_section(".text").unwrap();
     /// 
-    /// assert_eq!(SectionFlags::AllocExecute, text.header().flags);
+    /// assert_eq!(SectionFlags::AllocExecute, text.header().flags());
     /// ```
     pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
         self.sections.get(*self.section_map.get(section_name)?)

@@ -1,4 +1,4 @@
-//! Elfy header types and their contents
+//! Types which describe the decoded contents of an ELF file
 
 use std::io::{ Read, Seek, SeekFrom };
 
@@ -377,17 +377,12 @@ impl Parslet for Section {
 
 
  
-/// A 'SectionHeader' describes the location and the contents of an Elf section
+/// Describes the location and the contents of an Elf section
 #[derive(Debug)]
 pub struct SectionHeader {
     name_index: Size,
-
-    /// Describes the type of information contained within a section
-    pub ty: SectionType,
-
-    /// The flags used to mark this section
-    pub flags: SectionFlags,
-
+    ty: SectionType,
+    flags: SectionFlags,
     virtual_address: Address,
     offset: Address,
     section_size: Size,
@@ -395,6 +390,18 @@ pub struct SectionHeader {
     info: Word,
     align: Size,
     entry_size: Size,
+}
+
+impl SectionHeader {
+    /// Returns a `SectionType` describing the purpose of the section
+    pub fn section_type(&self) -> SectionType {
+        self.ty
+    }
+
+    /// Returns the sections flags
+    pub fn flags(&self) -> SectionFlags {
+        self.flags
+    }
 }
 
 impl Parslet for SectionHeader {
@@ -417,7 +424,7 @@ impl Parslet for SectionHeader {
 }
 
 /// Describes the type of information contained within a section
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SectionType {
     /// Marks a section as inactive
     /// 
@@ -508,7 +515,7 @@ impl Parslet for SectionType {
 }
 
 /// Section flags describe the allowable access patterns of an Elf section
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SectionFlags {
     /// No section flags
     None,
