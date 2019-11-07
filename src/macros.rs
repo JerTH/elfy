@@ -33,7 +33,7 @@ macro_rules! read_u16 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 2], u16>(__bytes);
 
-                if $descriptor.data_format() == DataFormat::BE {
+                if $descriptor.data_format()? == DataFormat::BigEndian {
                     __temp = __temp.to_le();
                 }
             }
@@ -51,7 +51,7 @@ macro_rules! read_u32 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 4], u32>(__bytes);
 
-                if $descriptor.data_format() == DataFormat::BE {
+                if $descriptor.data_format()? == DataFormat::BigEndian {
                     __temp = __temp.to_le();
                 }
             }
@@ -69,7 +69,7 @@ macro_rules! read_u64 {
             unsafe {
                 __temp = std::mem::transmute::<[u8; 8], u64>(__bytes);
 
-                if $descriptor.data_format() == DataFormat::BE {
+                if $descriptor.data_format()? == DataFormat::BigEndian {
                     __temp = __temp.to_le();
                 }
             }

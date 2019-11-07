@@ -4,9 +4,17 @@ use std::fmt::{ Display, Formatter };
 #[derive(Debug)]
 pub enum ParseElfError {
     IoError{ inner: std::io::Error },
-    InvalidDataClass,
-    InvalidSectionType{ section_type: u32 },
-    InvalidProgramFlags{ flags: u32 },
+    InvalidSectionType(u32),
+    InvalidProgramFlags(u32),
+    InvalidProgramHeader(u32),
+    InvalidVersion(u32),
+    InvalidMachine(u16),
+    InvalidElfType(u16),
+    InvalidOsAbi(u8),
+    InvalidIdentVersion(u8),
+    InvalidDataFormat(u8),
+    InvalidDataClass(u8),
+    InvalidParsingDescriptor,
 }
 
 impl Error for ParseElfError {

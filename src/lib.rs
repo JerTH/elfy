@@ -17,8 +17,39 @@ mod macros;
 mod constants;
 use crate::constants::*;
 
-mod primitives;
-use crate::primitives::*;
+mod numeric;
+use crate::numeric::*;
+
+/// Returned by ELFParslets
+pub type ParseElfResult<T> = std::result::Result<T, ParseElfError>;
+
+/// Trait used to describe how individual parts of the ELF file are to be parsed
+trait Parslet {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> where Self: Sized;
+}
+
+/// Describes context necessary to decode a given section of an ELF file
+enum Descriptor {
+    None,
+    Data{ format: DataFormat, class: DataClass },
+}
+
+impl Descriptor {
+    fn data_class(&self) -> ParseElfResult<DataClass> {
+        match self {
+            Descriptor::Data{ format: _, class } => Ok(class.clone()), 
+            Descriptor::None => Err(ParseElfError::InvalidParsingDescriptor),
+        }
+    }
+
+    fn data_format(&self) -> ParseElfResult<DataFormat> {
+        match self {
+            Descriptor::Data{ format, class: _ } => Ok(format.clone()),
+            Descriptor::None => Err(ParseElfError::InvalidParsingDescriptor)
+        }
+    }
+}
+
 
 /// Represents an ELF file header
 /// 
@@ -70,9 +101,9 @@ impl Parslet for Header {
 #[derive(Debug)]
 struct Identifier {
     magic: Magic,
-    class: Class,
-    data: ELFData,
-    version: ELFIdentVersion,
+    class: DataClass,
+    data: DataFormat,
+    version: IdentVersion,
     os_abi: OsAbi,
     abi_ver: AbiVersion,
 }
@@ -81,23 +112,16 @@ impl Parslet for Identifier {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         let parsed = Identifier {
             magic: Magic::parse(reader, descriptor)?,
-            class: Class::parse(reader, descriptor)?,
-            data: ELFData::parse(reader, descriptor)?,
-            version: ELFIdentVersion::parse(reader, descriptor)?,
+            class: DataClass::parse(reader, descriptor)?,
+            data: DataFormat::parse(reader, descriptor)?,
+            version: IdentVersion::parse(reader, descriptor)?,
             os_abi: OsAbi::parse(reader, descriptor)?,
             abi_ver: AbiVersion::parse(reader, descriptor)?,
         };
 
-        descriptor.class = match parsed.class {
-            Class::Elf32 => DataClass::Elf32,
-            Class::Elf64 => DataClass::Elf64,
-            Class::Invalid(_) => DataClass::Unknown,
-        };
-
-        descriptor.format = match parsed.data {
-            ELFData::LittleEndian => DataFormat::LE,
-            ELFData::BigEndian => DataFormat::BE,
-            ELFData::Invalid(_) => DataFormat::Unknown,
+        *descriptor = Descriptor::Data {
+            class: parsed.class,
+            format: parsed.data
         };
 
         // The end of the ident is composed of empty padding bytes, skip over them
@@ -125,50 +149,51 @@ impl Parslet for Magic {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum Class {
+enum DataClass {
     Elf32,
     Elf64,
-    Invalid(u8)
 }
 
-impl Parslet for Class {
+impl Parslet for DataClass {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::data_classes::*;
+        
         match read_byte!(reader) {
-            0x01 => Ok(Class::Elf32),
-            0x02 => Ok(Class::Elf64),
-            b => Ok(Class::Invalid(b))
+            ELF32 => Ok(DataClass::Elf32),
+            ELF64 => Ok(DataClass::Elf64),
+            v => Err(ParseElfError::InvalidDataClass(v))
         }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-enum ELFData {
+enum DataFormat {
     LittleEndian,
     BigEndian,
-    Invalid(u8)
 }
 
-impl Parslet for ELFData {
+impl Parslet for DataFormat {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::data_formats::*;
+
         match read_byte!(reader) {
-            0x01 => Ok(ELFData::LittleEndian),
-            0x02 => Ok(ELFData::BigEndian),
-            b => Ok(ELFData::Invalid(b))
+            LITTLE_ENDIAN => Ok(DataFormat::LittleEndian),
+            BIG_ENDIAN => Ok(DataFormat::BigEndian),
+            v => Err(ParseElfError::InvalidDataFormat(v))
         }
     }
 }
 
 #[derive(Debug)]
-enum ELFIdentVersion {
+enum IdentVersion {
     Current,
-    Invalid(u8)
 }
 
-impl Parslet for ELFIdentVersion {
+impl Parslet for IdentVersion {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
         match read_byte!(reader) {
-            0x01 => Ok(ELFIdentVersion::Current), // Elf only has one version, version one. Nonetheless we parse it as "current"
-            b => Ok(ELFIdentVersion::Invalid(b))
+            constants::CURRENT_IDENT_VERSION => Ok(IdentVersion::Current), // Elf only has one version, version one. Nonetheless we parse it as "current"
+            v => Err(ParseElfError::InvalidIdentVersion(v))
         }
     }
 }
@@ -176,14 +201,15 @@ impl Parslet for ELFIdentVersion {
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum OsAbi {
     UnixSystemV,
-    Invalid(u8)
 }
 
 impl Parslet for OsAbi {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::os_abi::*;
+        
         match read_byte!(reader) {
-            0x00 => Ok(OsAbi::UnixSystemV),
-            b => Ok(OsAbi::Invalid(b))
+            UNIX_SYSTEM_V => Ok(OsAbi::UnixSystemV),
+            v => Err(ParseElfError::InvalidOsAbi(v))
         }
     }
 }
@@ -191,14 +217,16 @@ impl Parslet for OsAbi {
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum AbiVersion {
     Unspecified,
-    Version(u8),
+    Specified(u8),
 }
 
 impl Parslet for AbiVersion {
     fn parse<R: Read + Seek>(reader: &mut R, _: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::abi_version::*;
+
         match read_byte!(reader) {
-            0x00 => Ok(AbiVersion::Unspecified),
-            b => Ok(AbiVersion::Version(b))
+            UNSPECIFIED => Ok(AbiVersion::Unspecified),
+            v => Ok(AbiVersion::Specified(v))
         }
     }
 }
@@ -210,22 +238,22 @@ enum ElfType {
     Executable,
     Shared,
     Core,
-    LoProc,
-    HiProc,
-    Invalid(u16),
+    ProcessorSpecific(u16)
 }
 
 impl Parslet for ElfType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::elf_types::*;
+
         match read_u16!(reader, descriptor) {
-            0x0000 => Ok(ElfType::None),
-            0x0001 => Ok(ElfType::Relocatable),
-            0x0002 => Ok(ElfType::Executable),
-            0x0003 => Ok(ElfType::Shared),
-            0x0004 => Ok(ElfType::Core),
-            0xFF00 => Ok(ElfType::LoProc),
-            0xFFFF => Ok(ElfType::HiProc),
-            b => Ok(ElfType::Invalid(b))
+            NONE => Ok(ElfType::None),
+            RELOCATABLE => Ok(ElfType::Relocatable),
+            EXECUTABLE => Ok(ElfType::Executable),
+            SHARED => Ok(ElfType::Shared),
+            CORE => Ok(ElfType::Core),
+
+            v @ LO_PROC ..= HI_PROC => Ok(ElfType::ProcessorSpecific(v)),
+            v => Err(ParseElfError::InvalidElfType(v))
         }
     }
 }
@@ -233,47 +261,43 @@ impl Parslet for ElfType {
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Machine {
     None,
-    AtmelAVR,
-    AMD64,
-    ARM,
-    ST200,
-    RISCV,
-    Invalid(u16),
+    AtmelAvr,
+    Amd64,
+    Arm,
+    St200,
+    RiscV,
 }
 
 impl Parslet for Machine {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
+        use constants::machines::*;
+
         match read_u16!(reader, descriptor) {
-            MACHINE_NONE => Ok(Machine::None),
-            MACHINE_ARM => Ok(Machine::ARM),
-            MACHINE_ATMELAVR => Ok(Machine::AtmelAVR),
-            MACHINE_AMD64 => Ok(Machine::AMD64),
-            MACHINE_ST200 => Ok(Machine::ST200),
-            MACHINE_RISCV => Ok(Machine::RISCV),
-            v => Ok(Machine::Invalid(v))
+            NONE => Ok(Machine::None),
+            ARM => Ok(Machine::Arm),
+            ATMELAVR => Ok(Machine::AtmelAvr),
+            AMD64 => Ok(Machine::Amd64),
+            ST200 => Ok(Machine::St200),
+            RISCV => Ok(Machine::RiscV),
+            v => Err(ParseElfError::InvalidMachine(v))
         }
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum Version {
     Current,
-    Invalid(u32)
 }
 
 impl Parslet for Version {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         match read_u32!(reader, descriptor) {
-            0x01 => Ok(Version::Current),
-            b => Ok(Version::Invalid(b))
+            CURRENT_ELF_VERSION => Ok(Version::Current),
+            v => Err(ParseElfError::InvalidVersion(v))
         }
     }
 }
 
-/**
- * Flags
- */
 struct Flags(u32);
 
 impl Parslet for Flags {
@@ -292,16 +316,10 @@ impl std::fmt::Debug for Flags {
 
 
 
-
-
-
-/* SECTIONS */
-
-/**
- * Represents one section in a loaded Elf binary
- * 
- * This structure contains both a sections as well as the parsed data which that header points to
- */
+/// Represents one section in a loaded Elf binary
+/// 
+/// This structure contains both a section header and the parsed
+/// data to which that header describes
 #[derive(Debug)]
 pub struct Section {
     header: SectionHeader,
@@ -439,31 +457,29 @@ pub enum SectionType {
 /// Describes the contents of an individual section which is used to determine how a section should be processed
 impl Parslet for SectionType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
-
-        use SectionType::*;
         use constants::section_types::*;
 
         match read_u32!(reader, descriptor) {
-            NULL => Ok(Null),
-            PROG_DATA => Ok(ProgramData),
-            SYM_TABLE => Ok(SymbolTable),
-            STR_TABLE => Ok(StringTable),
-            REL_A => Ok(RelocationWithAddends),
-            SYM_HASH => Ok(SymbolHashTable),
-            DYN_INFO => Ok(DynamicInfo),
-            NOTE => Ok(Note),
-            NO_BITS => Ok(NoBits),
-            RELOCATION => Ok(Relocation),
-            SHLIB => Ok(ShLib),
-            DYN_SYM_TAB => Ok(DynamicSymbolTable),
-            INIT => Ok(InitArray),
-            FINI => Ok(FiniArray),
-            PRE_INIT => Ok(PreInitArray),
-            GROUP => Ok(Group),
-            EXT_IDX => Ok(ExtendedSectionIndices),
+            NULL => Ok(SectionType::Null),
+            PROG_DATA => Ok(SectionType::ProgramData),
+            SYM_TABLE => Ok(SectionType::SymbolTable),
+            STR_TABLE => Ok(SectionType::StringTable),
+            REL_A => Ok(SectionType::RelocationWithAddends),
+            SYM_HASH => Ok(SectionType::SymbolHashTable),
+            DYN_INFO => Ok(SectionType::DynamicInfo),
+            NOTE => Ok(SectionType::Note),
+            NO_BITS => Ok(SectionType::NoBits),
+            RELOCATION => Ok(SectionType::Relocation),
+            SHLIB => Ok(SectionType::ShLib),
+            DYN_SYM_TAB => Ok(SectionType::DynamicSymbolTable),
+            INIT => Ok(SectionType::InitArray),
+            FINI => Ok(SectionType::FiniArray),
+            PRE_INIT => Ok(SectionType::PreInitArray),
+            GROUP => Ok(SectionType::Group),
+            EXT_IDX => Ok(SectionType::ExtendedSectionIndices),
 
             v @ 0x6000_0000 ..= 0xFFFF_FFFF => Ok(SectionType::OSSpecific(v)),
-            v => Err(ParseElfError::InvalidSectionType{ section_type: v })
+            v => Err(ParseElfError::InvalidSectionType(v))
         }
     }
 }
@@ -498,21 +514,25 @@ pub enum SectionFlags {
 
 impl Parslet for SectionFlags {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
-        let flags = Size::parse(reader, descriptor)?;
+        use constants::section_flags::*;
         
-        use SectionFlags::*;
-        let section_flags = match flags.as_usize() {
-            0b000 => None,
-            0b001 => Write,
-            0b010 => Alloc,
-            0b100 => Execute,
-            0b011 => WriteAlloc,
-            0b101 => WriteExecute,
-            0b110 => AllocExecute,
-            0b111 => WriteAllocExecute,
-            _ => ProcessorSpecific(flags)
-        };
-        Ok(section_flags)
+        // We capture flags first as a `Size` and then interpret it as
+        // a u64 in order to prevent data loss, while still being able
+        // to retain the `Size` variant of the original data in case
+        // the flags are `ProcessorSpecific`
+        let flags = Size::parse(reader, descriptor)?;
+        Ok(match flags.as_u64() {
+            NONE => SectionFlags::None,
+            WRITE => SectionFlags::Write,
+            ALLOC => SectionFlags::Alloc,
+            EXEC => SectionFlags::Execute,
+            WRITE_ALLOC => SectionFlags::WriteAlloc,
+            WRITE_EXEC => SectionFlags::WriteExecute,
+            ALLOC_EXEC => SectionFlags::AllocExecute,
+            WRITE_ALLOC_EXEC => SectionFlags::WriteAllocExecute,
+
+            _ => SectionFlags::ProcessorSpecific(flags)
+        })
     }
 }
 
@@ -593,8 +613,10 @@ impl Parslet for ProgramHeader {
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
         let mut flags = ProgramHeaderFlags::None;
 
+        let data_class = descriptor.data_class()?;
+
         // If this is an Elf64 file, the program flags appear before the 'offset' value
-        if descriptor.is_elf64() {
+        if data_class == DataClass::Elf64 {
             flags = ProgramHeaderFlags::parse(reader, descriptor)?;
         }
         
@@ -605,7 +627,7 @@ impl Parslet for ProgramHeader {
         let mem_size = Size::parse(reader, descriptor)?;
 
         // If this is an Elf32 file, the program flags actually appear after the 'mem_size' value
-        if descriptor.is_elf32() {
+        if data_class == DataClass::Elf32 {
             flags = ProgramHeaderFlags::parse(reader, descriptor)?;
         }
 
@@ -642,7 +664,6 @@ enum ProgramHeaderType {
     PHDR,
     OSSpecific(u32),
     ProcessorSpecific(u32),
-    Invalid(u32),
 }
 
 impl Parslet for ProgramHeaderType {
@@ -660,7 +681,7 @@ impl Parslet for ProgramHeaderType {
 
             v @ 0x6000_0000 ..= 0x6FFF_FFFF => Ok(ProgramHeaderType::OSSpecific(v)),
             v @ 0x7000_0000 ..= 0x7FFF_FFFF => Ok(ProgramHeaderType::ProcessorSpecific(v)),
-            v => Ok(ProgramHeaderType::Invalid(v))
+            v => Err(ParseElfError::InvalidProgramHeader(v))
         }
     }
 }
@@ -689,7 +710,7 @@ impl Parslet for ProgramHeaderFlags {
             READ_WRITE => Ok(ReadWrite),
             READ_EXEC => Ok(ReadExecute),
             READ_WRITE_EXEC => Ok(ReadWriteExecute),
-            v => Err(ParseElfError::InvalidProgramFlags{ flags: v })
+            v => Err(ParseElfError::InvalidProgramFlags(v))
         }
     }
 }
@@ -727,8 +748,8 @@ impl Elf {
     pub fn load<P: AsRef<std::path::Path>>(path: P) -> ParseElfResult<Elf> {
         let file = std::fs::File::open(path)?;
         let mut buf = std::io::BufReader::new(file);
-        let elf = Elf::parse(&mut buf)?;
-        Ok(elf)
+        
+        Ok(Elf::parse(&mut buf)?)
     }
 
     /// Parses an ELF file from a reader source
@@ -747,8 +768,8 @@ impl Elf {
     /// let elf = Elf::parse(&mut buf).unwrap();
     /// ```
     pub fn parse<R: Read + Seek>(reader: &mut R) -> ParseElfResult<Elf> {
-        let mut descriptor = Descriptor::new();
-
+        let mut descriptor = Descriptor::None;
+        
         let header = Header::parse(reader, &mut descriptor)?;
         let sections = parse_sections(reader, &mut descriptor, &header)?;
         let program_headers = parse_program_headers(reader, &mut descriptor, &header)?;
@@ -756,9 +777,12 @@ impl Elf {
 
         associate_string_table(&mut section_map, &sections, &header);
 
-        let parsed = Elf { header, sections, program_headers, section_map };
-
-        Ok(parsed)
+        Ok(Elf{
+            header,
+            sections,
+            program_headers,
+            section_map
+        })
     }
 
     /// Tries to retrieve a section by name, returns 'None' if the section does not exist
@@ -828,13 +852,13 @@ mod test {
 
         // Assert some known values in the test binary were parsed correctly
         assert_eq!(Magic::Valid, ident.magic);
-        assert_eq!(Class::Elf32, ident.class);
-        assert_eq!(ELFData::LittleEndian, ident.data);
+        assert_eq!(DataClass::Elf32, ident.class);
+        assert_eq!(DataFormat::LittleEndian, ident.data);
         assert_eq!(OsAbi::UnixSystemV, ident.os_abi);
         assert_eq!(AbiVersion::Unspecified, ident.abi_ver);
 
         assert_eq!(ElfType::Executable, header.ty);
-        assert_eq!(Machine::ARM, header.machine);
+        assert_eq!(Machine::Arm, header.machine);
         assert_eq!(Version::Current, header.version);
         assert_eq!(Address::Elf32Addr(0x11001), header.entry);
         assert_eq!(Size::Elf32Size(52), header.phoff);
@@ -853,6 +877,8 @@ mod test {
         let elf = load_example_binary();
         let text = elf.try_get_section(".text").unwrap();
 
+        println!("{:#?}", elf);
+
         assert_eq!(SectionFlags::AllocExecute, text.header.flags);
     }
 
@@ -860,10 +886,10 @@ mod test {
     fn test_try_get_fake_section() {
         let elf = load_example_binary();        
 
-        // We can be reasonably certain that no section with this name exists
-        assert!(elf.try_get_section(".j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
-        assert!(elf.try_get_section("_j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
-        assert!(elf.try_get_section("j482a0nflanakfg10enalnflasifbansnfalbf").is_none());
+        // We know before hand that this section does not exist in the example binary
+        assert!(elf.try_get_section(".aaaabbbbcccc").is_none());
+        assert!(elf.try_get_section("_aaaabbbbcccc").is_none());
+        assert!(elf.try_get_section("aaaabbbbcccc").is_none());
     }
 
     #[test]
@@ -871,7 +897,7 @@ mod test {
         let elf = load_example_binary();        
         let text = elf.try_get_section(".text").unwrap();
         
-        if let SectionData::Bytes(bytes) = text.data() {
+        if let SectionData::Bytes(_bytes) = text.data() {
             // do something with bytes
         }
     }

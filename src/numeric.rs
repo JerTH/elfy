@@ -1,67 +1,11 @@
-use std::convert::TryInto;
+//! Types describing various simple value types that may be found in an ELF file
+
 use std::io::{ Read, Seek };
+use std::convert::TryInto;
 
-use crate::error::ParseElfError;
+use crate::{ Parslet, ParseElfResult, Descriptor, DataClass, DataFormat };
 
-/// Returned by ELFParslets
-pub type ParseElfResult<T> = std::result::Result<T, ParseElfError>;
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum DataFormat {
-    LE,
-    BE,
-    Unknown
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum DataClass {
-    Elf32,
-    Elf64,
-    Unknown
-}
-
-pub struct Descriptor {
-    pub format: DataFormat,
-    pub class: DataClass,
-}
-
-impl Descriptor {
-    pub fn new() -> Descriptor {
-        Descriptor {
-            format: DataFormat::Unknown,
-            class: DataClass::Unknown
-        }
-    }
-
-    pub fn data_format(&self) -> DataFormat {
-        self.format
-    }
-
-    pub fn data_class(&self) -> DataClass {
-        self.class
-    }
-
-    pub fn is_elf32(&self) -> bool {
-        self.class == DataClass::Elf32
-    }
-
-    pub fn is_elf64(&self) -> bool {
-        self.class == DataClass::Elf64
-    }
-}
-
-/**
- * Trait used to define how individual parts of the ELF binary structure should be parsed
- */
-pub trait Parslet {
-    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> where Self: Sized;
-}
-
-/**
- * Short
- * 
- * Represents a 16 bit half word in an ELF file
- */
+/// Represents a 16 bit half word in an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Short(pub u16);
 
@@ -83,11 +27,7 @@ impl std::fmt::Debug for Short {
     }
 }
 
-/**
- * Word
- * 
- * Represents a 32 bit word in an ELF file
- */
+/// Represents a 32 bit word in an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Word(pub u32);
 
@@ -104,9 +44,7 @@ impl std::fmt::Debug for Word {
 }
 
 
-/**
- * Used to represent both 32 and 64 bit sizes and offsets within an ELF file
- */
+/// Used to represent both 32 and 64 bit sizes and offsets within an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Size {
     Elf32Size(u32),
@@ -128,10 +66,9 @@ impl Size {
 
 impl Parslet for Size {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
-        match descriptor.data_class() {
+        match descriptor.data_class()? {
             DataClass::Elf32 => Ok(Size::Elf32Size(read_u32!(reader, descriptor))),
             DataClass::Elf64 => Ok(Size::Elf64Size(read_u64!(reader, descriptor))),
-            DataClass::Unknown => Err(ParseElfError::InvalidDataClass)
         }
     }
 }
@@ -150,17 +87,12 @@ impl std::fmt::Debug for Size {
 }
 
 
-/**
- * Address
- * 
- * This struct is used to represent both 32 and 64 bit virtual or physical addresses in ELF files and process images
- */
+/// This struct is used to represent both 32 and 64 bit virtual or physical addresses in ELF files and process images
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Address {
     Elf32Addr(u32),
     Elf64Addr(u64)
 }
-
 impl Address {
     pub fn as_usize(&self) -> usize {
         match self {
@@ -172,10 +104,9 @@ impl Address {
 
 impl Parslet for Address {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
-        match descriptor.data_class() {
+        match descriptor.data_class()? {
             DataClass::Elf32 => Ok(Address::Elf32Addr(read_u32!(reader, descriptor))),
             DataClass::Elf64 => Ok(Address::Elf64Addr(read_u64!(reader, descriptor))),
-            DataClass::Unknown => Err(ParseElfError::InvalidDataClass)
         }
     }
 }
