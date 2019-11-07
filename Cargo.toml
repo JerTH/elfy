@@ -1,6 +1,6 @@
 [package]
 name = "elfy"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["JerTH <jeremyhatcher27@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -9,7 +9,7 @@ A Rust crate for reading ELF files
 """
 readme = "README.md"
 
-keywords = ["ELF", "unix", "arm"]
+keywords = ["ELF", "UNIX", "ARM"]
 
 homepage = "https://github.com/JerTH/elfy"
 documentation = "https://docs.rs/elfy"

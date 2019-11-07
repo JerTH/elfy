@@ -15,7 +15,7 @@ Elfy is currently focused on reading data important to statically compiled ARM e
 To use Elfy, first add it as a dependency in your projects `Cargo.toml`
 ```toml
 [dependencies]
-elfy = "0.1.5"
+elfy = "0.1.7"
 ```
 
 To load an ELF file, include Elfy as an external crate. Loading an ELF file from disk and parsing it is now as simple as calling `Elf::load(path)` where `path` is any valid `std::path::Path` to an ELF file. If the file doesn't exist, the file isn't valid ELF, or there is a problem parsing the file then `load()` will return `Err(ParseElfError)` with a description of what went wrong.
@@ -45,7 +45,7 @@ fn main() {
 
     // The .text section usually contains executable machine code and as such will be
     // parsed as raw binary data. Here we retrieve a vector of that data in `bytes` 
-    if let SectionData::Bytes(bytes) = text.data() {
+    if let SectionData::Bytes(bytes) = text_section.data() {
         // ...
     }
 
