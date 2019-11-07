@@ -5,6 +5,8 @@
 //! These constants should not be modified, as they are critical to the correct
 //! interpretation of ELF file data.
 
+#![allow(missing_docs)]
+
 use crate::numeric::*;
 
 pub const CURRENT_IDENT_VERSION: u8 = 0x01;
@@ -82,10 +84,10 @@ pub mod elf_types {
     pub const HI_PROC: u16 = 0xFFFF;
 }
 
-pub mod abi_version {
+pub mod abi_versions {
     pub const UNSPECIFIED: u8 = 0x00;
 }
 
-pub mod os_abi {
+pub mod os_abis {
     pub const UNIX_SYSTEM_V: u8 = 0x00;
 }

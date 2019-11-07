@@ -5,7 +5,7 @@
 macro_rules! read_n_bytes {
     ($reader:expr, $num:expr) => {
         {
-            let mut __bytes: Vec<u8> = Vec::new();
+            let mut __bytes: Vec<u8> = Vec::with_capacity($num as usize);
             for byte in $reader.bytes().take($num) {
                 __bytes.push(byte.unwrap());
             }

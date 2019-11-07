@@ -10,6 +10,7 @@ use crate::{ Parslet, ParseElfResult, Descriptor, DataClass, DataFormat };
 pub struct Short(pub u16);
 
 impl Short {
+    /// Returns the contained `u16` as a `usize`, zero extending it
     pub fn as_usize(self) -> usize {
         self.0 as usize
     }
@@ -47,18 +48,27 @@ impl std::fmt::Debug for Word {
 /// Used to represent both 32 and 64 bit sizes and offsets within an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Size {
+    /// The `Size` type for ELF32
     Elf32Size(u32),
+
+    /// The `Size` type for ELF64
     Elf64Size(u64)
 }
 
 impl Size {
+    /// Returns the contained value as `usize`
+    /// 
+    /// # Panics
+    /// 
+    /// This method panics if the contained value would not fit into a `usize` without truncation
     pub fn as_usize(&self) -> usize {
         match self {
-            Size::Elf32Size(v) => (*v).try_into().unwrap(),
-            Size::Elf64Size(v) => (*v).try_into().unwrap()
+            Size::Elf32Size(v) => (*v).try_into().expect("Unable to convert `Elf32Size` to `usize` without truncating"),
+            Size::Elf64Size(v) => (*v).try_into().expect("Unable to convert `Elf64Size` to `usize` without truncating")
         }
     }
 
+    /// Returns the contained value as a `u64`, zero extending it if necessary
     pub fn as_u64(&self) -> u64 {
         self.as_usize() as u64
     }
@@ -90,14 +100,21 @@ impl std::fmt::Debug for Size {
 /// This struct is used to represent both 32 and 64 bit virtual or physical addresses in ELF files and process images
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Address {
+    /// The `Address` type for ELF32
     Elf32Addr(u32),
+    /// The `Address` type for ELF64
     Elf64Addr(u64)
 }
 impl Address {
+    /// Returns the contained value as `usize`
+    /// 
+    /// # Panics
+    /// 
+    /// This method panics if the contained value would not fit into a `usize` without truncation
     pub fn as_usize(&self) -> usize {
         match self {
-            Address::Elf32Addr(v) => (*v).try_into().unwrap(),
-            Address::Elf64Addr(v) => (*v).try_into().unwrap()
+            Address::Elf32Addr(v) => (*v).try_into().expect("Unable to convert `Elf32Addr` to `usize` without truncating"),
+            Address::Elf64Addr(v) => (*v).try_into().expect("Unable to convert `Elf64Addr` to `usize` without truncating")
         }
     }
 }
