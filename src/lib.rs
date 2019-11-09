@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
 
-//! A crate for reading data from ELF files quickly and simply
+//! A rusty crate for reading data from ELF files quickly and simply
 //! 
 //! Currently Elfy is focused on reading data important to statically compiled ARM
 //! executables, in the future it will support more architectures and ELF features
@@ -202,7 +202,15 @@ impl Elf {
     /// ```
     pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
         self.sections.get(*self.section_map.get(section_name)?)
-    }    
+    }
+
+    /// Returns an `Iterator` that iterates over references of sections contained in this `Elf` file
+    pub fn sections(&self) -> SectionIter {
+        SectionIter {
+            elf: &self,
+            idx: 0
+        }
+    }
 }
 
 // TODO: Iterators for headers and sections
@@ -235,6 +243,38 @@ fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &[
     }
 }
 
+/// Iterator over the sections in an ELF file
+pub struct SectionIter<'a> {
+    elf: &'a Elf,
+    idx: usize,
+}
+
+impl<'a> Iterator for SectionIter<'a> {
+    type Item = &'a Section;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.elf.sections.get(self.idx)?;
+        self.idx += 1;
+        Some(item)
+    }
+}
+
+/// Iterator over the program headers in an ELF file
+pub struct ProgramHeaderIter<'a> {
+    elf: &'a Elf,
+    idx: usize,
+}
+
+impl<'a> Iterator for ProgramHeaderIter<'a> {
+    type Item = &'a ProgramHeader;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.elf.program_headers.get(self.idx)?;
+        self.idx += 1;
+        Some(item)
+    }
+}
+
 /// The Elfy prelude
 pub mod prelude {
     pub use crate::numeric::*;
@@ -252,12 +292,27 @@ mod test {
     }
     
     #[test]
-    fn test_get_bytes_data() {
+    fn get_section_bytes() {
         let elf = _load_example_binary();        
         let text = elf.try_get_section(".text").unwrap();
         
         if let SectionData::Bytes(_bytes) = text.data() {
             // do something with bytes
+        }
+    }
+
+    #[test]
+    fn section_iters() {
+        let elf = _load_example_binary();
+
+        for (i, s) in elf.sections().enumerate() {
+            match i {
+                0 => assert_eq!(s.header().section_type(), SectionType::Null),
+                2 => assert_eq!(s.header().section_type(), SectionType::ProgramData),
+                5 => assert_eq!(s.header().section_type(), SectionType::SymbolTable),
+                6 => assert_eq!(s.header().section_type(), SectionType::StringTable),
+                _ => continue
+            }
         }
     }
 }

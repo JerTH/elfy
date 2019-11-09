@@ -755,7 +755,7 @@ mod test {
     }
 
     #[test]
-    fn test_parse_elf_header() {
+    fn parse_elf_header() {
         let elf = _load_example_binary();
 
         let header = &elf.header;
@@ -784,17 +784,15 @@ mod test {
     }
 
     #[test]
-    fn test_try_get_section() {
+    fn try_get_section() {
         let elf = _load_example_binary();
         let text = elf.try_get_section(".text").unwrap();
-
-        println!("{:#?}", elf);
 
         assert_eq!(SectionFlags::AllocExecute, text.header.flags);
     }
 
     #[test]
-    fn test_try_get_fake_section() {
+    fn try_get_fake_section() {
         let elf = _load_example_binary();        
 
         // We know before hand that this section does not exist in the example binary
