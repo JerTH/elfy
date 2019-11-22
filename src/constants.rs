@@ -93,3 +93,11 @@ pub mod abi_versions {
 pub mod os_abis {
     pub const UNIX_SYSTEM_V: u8 = 0x00;
 }
+
+pub mod processor_specific_header_types {
+    pub const ARM_EXIDX: u32 = 0x70000001;
+}
+
+pub mod os_specific_header_types {
+    pub const GNU_STACK: u32 = 0x6474E551;
+}

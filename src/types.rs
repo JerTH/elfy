@@ -482,6 +482,9 @@ pub enum SectionType {
 
     /// Section contains information defined by and specific to the operating system
     OSSpecific(u32),
+
+    #[allow(missing_docs)]
+    Unknown(u32),
 }
 
 /// Describes the contents of an individual section which is used to determine how a section should be processed
@@ -509,7 +512,8 @@ impl Parslet for SectionType {
             EXT_IDX => Ok(SectionType::ExtendedSectionIndices),
 
             v @ 0x6000_0000 ..= 0xFFFF_FFFF => Ok(SectionType::OSSpecific(v)),
-            v => Err(ParseElfError::InvalidSectionType(v))
+            v => Ok(SectionType::Unknown(v)),
+            //v => Err(ParseElfError::InvalidSectionType(v))
         }
     }
 }
@@ -636,6 +640,18 @@ pub struct ProgramHeader {
     align: Size
 }
 
+impl ProgramHeader {
+    /// Returns a `SectionType` describing the purpose of the section
+    pub fn program_header_type(&self) -> ProgramHeaderType {
+        self.ty
+    }
+
+    /// Returns the sections flags
+    pub fn flags(&self) -> ProgramHeaderFlags {
+        self.flags
+    } 
+}
+
 impl Parslet for ProgramHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
 
@@ -680,7 +696,7 @@ impl Parslet for ProgramHeader {
 
 /// Describes the way in which the section pointed to by a program header is to be processed
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgramHeaderType {
     Null,
     Loadable,
@@ -688,7 +704,14 @@ pub enum ProgramHeaderType {
     InterpreterInfo,
     AuxiliaryInfo,
     ShLib,
-    PHDR,
+    Phdr,
+
+    // Known OS specific
+    GnuStack,
+
+    // Known processor specific
+    ArmExidx,
+
     OSSpecific(u32),
     ProcessorSpecific(u32),
 }
@@ -696,6 +719,9 @@ pub enum ProgramHeaderType {
 impl Parslet for ProgramHeaderType {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         
+        use constants::os_specific_header_types::*;
+        use constants::processor_specific_header_types::*;
+
         use ProgramHeaderType::*;
         match read_u32!(reader, descriptor) {
             0x00 => Ok(Null),
@@ -704,7 +730,13 @@ impl Parslet for ProgramHeaderType {
             0x03 => Ok(InterpreterInfo),
             0x04 => Ok(AuxiliaryInfo),
             0x05 => Ok(ShLib),
-            0x06 => Ok(PHDR),
+            0x06 => Ok(Phdr),
+
+            // Known OS specific
+            GNU_STACK => Ok(GnuStack),
+
+            // Known processor specific
+            ARM_EXIDX => Ok(ArmExidx),
 
             v @ 0x6000_0000 ..= 0x6FFF_FFFF => Ok(ProgramHeaderType::OSSpecific(v)),
             v @ 0x7000_0000 ..= 0x7FFF_FFFF => Ok(ProgramHeaderType::ProcessorSpecific(v)),
@@ -715,7 +747,7 @@ impl Parslet for ProgramHeaderType {
 
 /// Flags which describe the allowable access patterns of a given section described by a `ProgramHeader`
 #[allow(missing_docs)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgramHeaderFlags {
     None,
     Read,
