@@ -350,7 +350,7 @@ pub struct Section {
 }
 
 impl Section {
-    /// Returns a reference to a 'SectionData' instance which contains the parsed data contained by the section
+    /// Returns a reference to a 'SectionData' instance which contains the parsed data contained by the section 
     pub fn data(&self) -> &SectionData {
         &self.data
     }
@@ -625,9 +625,58 @@ impl SectionData {
     }
 }
 
+/// Represents one segment in a loaded Elf binary
+/// 
+/// This structure contains the program header associate with the segment, as well as a copy of the raw bytes the header describes
+pub struct Segment {
+    header: ProgramHeader,
+    data: Vec<u8>,
+}
+
+impl Segment {
+    /// Returns a reference to a vector containing the raw data of the segment
+    pub fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+
+    /// Returns a reference to the segments program header
+    pub fn header(&self) -> &ProgramHeader {
+        &self.header
+    }
+}
+
+impl Parslet for Segment {
+    fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
+        let header = ProgramHeader::parse(reader, descriptor)?;
+        
+        /* Read segment bytes */
+        let position = reader.seek(SeekFrom::Current(0)).unwrap(); // Save our position
+        
+        let segment_offs = header.offset.as_usize() as u64;
+
+        let _ = reader.seek(SeekFrom::Start(segment_offs))?; // Move the readers position to the beginning of the segment
+        let data = read_n_bytes!(reader, header.file_size.as_usize()); // Read the segment
+        let _ = reader.seek(SeekFrom::Start(position))?; // Reset our position
+
+        let segment = Segment {
+            header,
+            data
+        };
+
+        Ok(segment)
+    }
+}
+
+impl std::fmt::Debug for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:#?},", self.header)?;
+        write!(f, "data: [raw]")
+    }
+}
 
 
-/// Program headers are used to describe how sections are to be loaded into memory in order to construct an executable process
+/// Program headers describe segments comprised of zero or more sections which are
+/// loaded into memory in order to construct a process image
 #[derive(Debug)]
 pub struct ProgramHeader {
     ty: ProgramHeaderType,
@@ -655,7 +704,6 @@ impl ProgramHeader {
 impl Parslet for ProgramHeader {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
 
-        
         let ty = ProgramHeaderType::parse(reader, descriptor)?;
         let mut flags = ProgramHeaderFlags::None;
 

@@ -133,7 +133,7 @@ impl Descriptor {
 pub struct Elf {
     header: ElfHeader,
     sections: Vec<Section>,
-    program_headers: Vec<ProgramHeader>,
+    segments: Vec<Segment>,
     section_map: HashMap<String, usize>,
 }
 
@@ -176,7 +176,7 @@ impl Elf {
         
         let header = ElfHeader::parse(reader, &mut descriptor)?;
         let sections = parse_sections(reader, &mut descriptor, &header)?;
-        let program_headers = parse_program_headers(reader, &mut descriptor, &header)?;
+        let segments = parse_segments(reader, &mut descriptor, &header)?;
         let mut section_map = HashMap::new();
 
         associate_string_table(&mut section_map, &sections, &header);
@@ -184,7 +184,7 @@ impl Elf {
         Ok(Elf{
             header,
             sections,
-            program_headers,
+            segments,
             section_map
         })
     }
@@ -213,8 +213,8 @@ impl Elf {
     }
 
     /// Returns an `Iterator` that iterates over references of program headers contained in this `Elf` file
-    pub fn program_headers(&self) -> ProgramHeaderIter {
-        ProgramHeaderIter {
+    pub fn segments(&self) -> SegmentIter {
+        SegmentIter {
             elf: &self,
             idx: 0
         }
@@ -231,13 +231,13 @@ fn parse_sections<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, h
     Ok(sections)
 }
 
-fn parse_program_headers<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, header: &ElfHeader) -> ParseElfResult<Vec<ProgramHeader>> {
+fn parse_segments<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor, header: &ElfHeader) -> ParseElfResult<Vec<Segment>> {
     reader.seek(SeekFrom::Start(header.program_headers_offset()))?;
-    let mut program_headers = Vec::new();
+    let mut segments = Vec::new();
     for _ in 0..header.program_header_count() {
-        program_headers.push(ProgramHeader::parse(reader, descriptor)?)
+        segments.push(Segment::parse(reader, descriptor)?)
     }
-    Ok(program_headers)
+    Ok(segments)
 }
 
 fn associate_string_table(section_map: &mut HashMap<String, usize>, sections: &[Section], header: &ElfHeader) {
@@ -268,16 +268,16 @@ impl<'a> Iterator for SectionIter<'a> {
 }
 
 /// Iterator over the program headers in an ELF file
-pub struct ProgramHeaderIter<'a> {
+pub struct SegmentIter<'a> {
     elf: &'a Elf,
     idx: usize,
 }
 
-impl<'a> Iterator for ProgramHeaderIter<'a> {
-    type Item = &'a ProgramHeader;
+impl<'a> Iterator for SegmentIter<'a> {
+    type Item = &'a Segment;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = self.elf.program_headers.get(self.idx)?;
+        let item = self.elf.segments.get(self.idx)?;
         self.idx += 1;
         Some(item)
     }
@@ -325,17 +325,18 @@ mod test {
     }
 
     #[test]
-    fn program_header_iters() {
+    fn segment_iters() {
         let elf = _load_example_binary();
 
-        for (i, h) in elf.program_headers().enumerate() {
-            println!("{:#?}", h);
+        println!("{:#?}", elf);
+
+        for (i, h) in elf.segments().enumerate() {
             match i {
-                0 => assert_eq!(h.program_header_type(), ProgramHeaderType::Phdr),
-                1 => assert_eq!(h.program_header_type(), ProgramHeaderType::Loadable),
-                2 => assert_eq!(h.program_header_type(), ProgramHeaderType::Loadable),
-                3 => assert_eq!(h.program_header_type(), ProgramHeaderType::GnuStack),
-                4 => assert_eq!(h.program_header_type(), ProgramHeaderType::ArmExidx),
+                0 => assert_eq!(h.header().program_header_type(), ProgramHeaderType::Phdr),
+                1 => assert_eq!(h.header().program_header_type(), ProgramHeaderType::Loadable),
+                2 => assert_eq!(h.header().program_header_type(), ProgramHeaderType::Loadable),
+                3 => assert_eq!(h.header().program_header_type(), ProgramHeaderType::GnuStack),
+                4 => assert_eq!(h.header().program_header_type(), ProgramHeaderType::ArmExidx),
                 _ => continue
             }
         }
