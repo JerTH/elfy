@@ -698,7 +698,38 @@ impl ProgramHeader {
     /// Returns the sections flags
     pub fn flags(&self) -> ProgramHeaderFlags {
         self.flags
-    } 
+    }
+
+    /// Returns the sections alignment
+    /// 
+    /// If no alignment is required, returns `None`
+    pub fn alignment(&self) -> Option<usize> {
+        if self.align.as_u64() <= 1u64 {
+            None
+        } else {
+            Some(self.align.as_usize())
+        }
+    }
+    
+    /// Returns the virtual address at which the first byte of the segment resides in memory
+    pub fn virtual_address(&self) -> usize {
+        self.virtual_address.as_usize()
+    }
+
+    /// Returns the segments physical address
+    pub fn physical_address(&self) -> usize {
+        self.physical_address.as_usize()
+    }
+
+    /// Returns the number of bytes the segment occupies in the file image
+    pub fn file_size(&self) -> usize {
+        self.file_size.as_usize()
+    }
+
+    /// Returns the number of bytes the segment occupies in the memory image
+    pub fn memory_size(&self) -> usize {
+        self.mem_size.as_usize()
+    }
 }
 
 impl Parslet for ProgramHeader {
