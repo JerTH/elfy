@@ -32,6 +32,18 @@ impl std::fmt::Debug for Short {
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Word(pub u32);
 
+impl Word {
+    /// Returns the contained `u32` as a `usize`, zero extending it if necessary
+    pub fn as_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    /// Returns the contained 'u32' as a `u64`, zero extending it
+    pub fn as_u64(self) -> u64 {
+        self.0 as u64
+    }
+}
+
 impl Parslet for Word {
     fn parse<R: Read + Seek>(reader: &mut R, descriptor: &mut Descriptor) -> ParseElfResult<Self> {
         Ok(Word(read_u32!(reader, descriptor)))

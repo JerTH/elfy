@@ -7,7 +7,7 @@
 [Crates.io](https://crates.io/crates/elfy)
 
 #### Description
-Elfy is for loading and parsing [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) files. The project began as a simple binary loader for an ARMv7-M virtual machine, but quickly evolved into its own standalone crate. The goal of Elfy is to provide a simple and ergonomic interface for working with ELF files of all types.
+Elfy is for loading and parsing [ELF](https://en.wikipedia.org/wiki/Executable_and_Linkable_Format) ([2](https://wiki.osdev.org/ELF)) files. The project began as a simple binary loader for an ARMv7-M virtual machine, but quickly evolved into its own standalone crate. The goal of Elfy is to provide a simple and ergonomic interface for working with ELF files of all types.
 
 Elfy is currently focused on reading data important to statically compiled ARM executables, in the future it will support more architectures and ELF features.
 
