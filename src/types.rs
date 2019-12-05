@@ -402,6 +402,34 @@ impl SectionHeader {
     pub fn flags(&self) -> SectionFlags {
         self.flags
     }
+
+    /// Returns the address at which the first byte of the section will appear in a memory image, or zero if it does not
+    pub fn address(&self) -> usize {
+        self.virtual_address.as_usize()
+    }
+
+    /// Returns the sections address alignment, or `None` if it does not require alignment
+    pub fn alignment(&self) -> Option<usize> {
+        if self.align.as_u64() <= 1u64 {
+            None
+        } else {
+            Some(self.align.as_usize())
+        }
+    }
+
+    /// If the section contains a table of fixed sized entries, this returns the size in bytes of each entry, or `None` otherwise
+    pub fn entry_size(&self) -> Option<usize> {
+        if self.entry_size.as_u64() == 0 {
+            None
+        } else {
+            Some(self.entry_size.as_usize())
+        }
+    }
+    
+    /// Returns the extra info field of the section. The interpretation of this field is dependent on the sections type
+    pub fn info(&self) -> usize {
+        self.info.as_usize()
+    }
 }
 
 impl Parslet for SectionHeader {
@@ -710,7 +738,7 @@ impl ProgramHeader {
             Some(self.align.as_usize())
         }
     }
-    
+
     /// Returns the virtual address at which the first byte of the segment resides in memory
     pub fn virtual_address(&self) -> usize {
         self.virtual_address.as_usize()

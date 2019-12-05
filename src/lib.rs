@@ -99,7 +99,7 @@ trait Parslet {
 /// 
 /// Correctly reading and interpretting ELF files is an incremental process, meaning
 /// not all of the necessary context is available immediately and is revealed
-/// incrementally. This type is used to maintain that context as we gather it.
+/// as the file is processed. This type is used to maintain that context as we gather it.
 enum Descriptor {
     None,
     Data{ format: DataFormat, class: DataClass },
@@ -122,13 +122,10 @@ impl Descriptor {
 }
 
 
-
-/**
- * Represents a parsed ELF (Executable and Linkable Format) file.
- * 
- * The ELF format is a common standard file format for executable files, object code,
- * shared libraries, and core dumps.
- */
+/// Represents a parsed ELF (Executable and Linkable Format) file.
+/// 
+/// The ELF format is a common standard file format for executable files, object code,
+/// shared libraries, and core dumps.
 #[derive(Debug)]
 pub struct Elf {
     header: ElfHeader,
