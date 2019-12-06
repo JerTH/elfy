@@ -29,30 +29,45 @@ pub struct ElfHeader {
 }
 
 impl ElfHeader {
+    /// Returns the address of the programs entry point. This is the point where execution begins
+    pub fn entry(&self) -> usize {
+        self.entry.as_usize()
+    }
+
+    /// Returns the type of the ELF file
+    pub fn elf_type(&self) -> ElfType {
+        self.ty.clone()
+    }
+
+    /// Returns the machine target of the ELF file
+    pub fn machine(&self) -> Machine {
+        self.machine.clone()
+    }
+
     /// Returns the direct offset of the program header table within an ELF file
-    pub fn program_headers_offset(&self) -> u64 {
+    pub (in crate) fn program_headers_offset(&self) -> u64 {
         self.phoff.as_u64()
     }
 
     /// Returns the number of program headers in the program header table
-    pub fn program_header_count(&self) -> usize {
+    pub (in crate) fn program_header_count(&self) -> usize {
         self.phnum.as_usize()
     }
 
     /// Returns the direct offset of the section header table within an ELF file
-    pub fn section_headers_offset(&self) -> u64 {
+    pub (in crate) fn section_headers_offset(&self) -> u64 {
         self.shoff.as_u64()
     }
 
     /// Returns the number of section headers in the section header table
-    pub fn section_header_count(&self) -> usize {
+    pub (in crate) fn section_header_count(&self) -> usize {
         self.shnum.as_usize()
     }
 
     /// Returns the index into the section header table of the section name string table
     /// 
     /// Not all ELF files contain a section name string table, in this case, `None` is returned
-    pub fn section_name_table_index(&self) -> Option<usize> {
+    pub (in crate) fn section_name_table_index(&self) -> Option<usize> {
         if self.shstrndx != constants::SHN_UNDEF {
             Some(self.shstrndx.as_usize())
         } else {

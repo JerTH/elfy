@@ -108,14 +108,14 @@ enum Descriptor {
 impl Descriptor {
     fn data_class(&self) -> ParseElfResult<DataClass> {
         match self {
-            Descriptor::Data{ format: _, class } => Ok(class.clone()), 
+            Descriptor::Data{ class, .. } => Ok(*class), 
             Descriptor::None => Err(ParseElfError::InvalidParsingDescriptor),
         }
     }
 
     fn data_format(&self) -> ParseElfResult<DataFormat> {
         match self {
-            Descriptor::Data{ format, class: _ } => Ok(format.clone()),
+            Descriptor::Data{ format, .. } => Ok(*format),
             Descriptor::None => Err(ParseElfError::InvalidParsingDescriptor)
         }
     }
@@ -199,6 +199,11 @@ impl Elf {
     /// ```
     pub fn try_get_section(&self, section_name: &str) -> Option<&Section> {
         self.sections.get(*self.section_map.get(section_name)?)
+    }
+
+    /// Returns the ELF files header
+    pub fn header(&self) -> &ElfHeader {
+        &self.header
     }
 
     /// Returns an `Iterator` that iterates over references of sections contained in this `Elf` file

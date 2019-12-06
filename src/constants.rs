@@ -95,9 +95,9 @@ pub mod os_abis {
 }
 
 pub mod processor_specific_header_types {
-    pub const ARM_EXIDX: u32 = 0x70000001;
+    pub const ARM_EXIDX: u32 = 0x7000_0001;
 }
 
 pub mod os_specific_header_types {
-    pub const GNU_STACK: u32 = 0x6474E551;
+    pub const GNU_STACK: u32 = 0x6474_E551;
 }
