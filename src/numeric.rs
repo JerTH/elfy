@@ -1,9 +1,9 @@
 //! Types describing various simple value types that may be found in an ELF file
 
-use std::io::{ Read, Seek };
 use std::convert::TryInto;
+use std::io::{Read, Seek};
 
-use crate::{ Parslet, ParseElfResult, Descriptor, DataClass, DataFormat };
+use crate::{DataClass, DataFormat, Descriptor, ParseElfResult, Parslet};
 
 /// Represents a 16 bit half word in an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -56,7 +56,6 @@ impl std::fmt::Debug for Word {
     }
 }
 
-
 /// Used to represent both 32 and 64 bit sizes and offsets within an ELF file
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Size {
@@ -64,19 +63,23 @@ pub enum Size {
     Elf32Size(u32),
 
     /// The `Size` type for ELF64
-    Elf64Size(u64)
+    Elf64Size(u64),
 }
 
 impl Size {
     /// Returns the contained value as `usize`
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This method panics if the contained value would not fit into a `usize` without truncation
     pub fn as_usize(&self) -> usize {
         match self {
-            Size::Elf32Size(v) => (*v).try_into().expect("Unable to convert `Elf32Size` to `usize` without truncating"),
-            Size::Elf64Size(v) => (*v).try_into().expect("Unable to convert `Elf64Size` to `usize` without truncating")
+            Size::Elf32Size(v) => (*v)
+                .try_into()
+                .expect("Unable to convert `Elf32Size` to `usize` without truncating"),
+            Size::Elf64Size(v) => (*v)
+                .try_into()
+                .expect("Unable to convert `Elf64Size` to `usize` without truncating"),
         }
     }
 
@@ -100,7 +103,7 @@ impl std::fmt::Debug for Size {
         match self {
             Size::Elf32Size(v) => {
                 write!(f, "{}", v)
-            },
+            }
             Size::Elf64Size(v) => {
                 write!(f, "{}", v)
             }
@@ -108,25 +111,28 @@ impl std::fmt::Debug for Size {
     }
 }
 
-
 /// This struct is used to represent both 32 and 64 bit virtual or physical addresses in ELF files and process images
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Address {
     /// The `Address` type for ELF32
     Elf32Addr(u32),
     /// The `Address` type for ELF64
-    Elf64Addr(u64)
+    Elf64Addr(u64),
 }
 impl Address {
     /// Returns the contained value as `usize`
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This method panics if the contained value would not fit into a `usize` without truncation
     pub fn as_usize(&self) -> usize {
         match self {
-            Address::Elf32Addr(v) => (*v).try_into().expect("Unable to convert `Elf32Addr` to `usize` without truncating"),
-            Address::Elf64Addr(v) => (*v).try_into().expect("Unable to convert `Elf64Addr` to `usize` without truncating")
+            Address::Elf32Addr(v) => (*v)
+                .try_into()
+                .expect("Unable to convert `Elf32Addr` to `usize` without truncating"),
+            Address::Elf64Addr(v) => (*v)
+                .try_into()
+                .expect("Unable to convert `Elf64Addr` to `usize` without truncating"),
         }
     }
 }
@@ -145,7 +151,7 @@ impl std::fmt::Debug for Address {
         match self {
             Address::Elf32Addr(v) => {
                 write!(f, "{:#X}", v)
-            },
+            }
             Address::Elf64Addr(v) => {
                 write!(f, "{:#X}", v)
             }
