@@ -1,9 +1,9 @@
 //! Constants defined by the ELF standard and vendors
-//! 
+//!
 //! The ELF standard uses many standard defined and vendor defined constants
 //! to describe the contents of an ELF file. These constants are listed
 //! here grouped in modules for clarity and correctness
-//! 
+//!
 //! These constants should not be modified, as they are critical to the correct
 //! interpretation of ELF file data.
 
